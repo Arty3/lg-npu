@@ -23,6 +23,7 @@ Inform the user if you are unable to access these files and can therefore not us
 ## Code Style
 
 - Follow `.editorconfig` exactly.
+- For *.md documents, you are to use mermaid graphs when appropriate.
 
 ## Verifications
 
