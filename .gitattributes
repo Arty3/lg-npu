@@ -1,0 +1,39 @@
+# Default
+* text=auto
+
+# Source files
+*.sv text diff
+*.svh text diff
+*.v text diff
+*.vh text diff
+*.tcl text
+*.py text
+*.c text
+*.h text
+*.md text
+*.sh text
+*.yml text
+*.yaml text
+*.json text
+
+# Hardware description language diffs
+*.sv linguist-language=Verilog
+*.svh linguist-language=Verilog
+
+# Binary files (do not diff)
+*.bit binary
+*.bin binary
+*.sof binary
+*.pof binary
+*.vcd binary
+*.fst binary
+*.fsdb binary
+*.gds binary
+*.gds2 binary
+*.oas binary
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.svg text

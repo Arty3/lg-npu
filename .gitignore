@@ -1,0 +1,121 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+venv/
+.env/
+
+# Build artifacts
+build/
+dist/
+out/
+tmp/
+temp/
+
+# Simulation outputs
+sim/build/
+sim/work/
+sim/out/
+sim/results/
+sim/waves/
+*.vcd
+*.fst
+*.wlf
+*.fsdb
+*.vpd
+*.lxt
+*.lxt2
+*.trn
+
+# Verilator
+obj_dir/
+*.d
+*.o
+
+# Questa / ModelSim
+work/
+transcript
+vsim.wlf
+modelsim.ini
+
+# Xilinx Vivado
+*.jou
+*.log
+*.str
+*.pb
+*.runs/
+*.cache/
+*.ip_user_files/
+*.hw/
+*.sim/
+*.xpr
+*.bit
+*.bin
+*.ltx
+
+# Intel Quartus
+db/
+incremental_db/
+*.qpf
+*.qsf
+*.sof
+*.pof
+*.rpt
+
+# ASIC flows
+asic/build/
+asic/work/
+asic/syn/reports/
+asic/pnr/reports/
+asic/signoff/reports/
+*.gds
+*.gds2
+*.oas
+*.lef
+*.def
+*.spef
+*.sdf
+
+# Formal verification outputs
+formal/work/
+formal/out/
+
+# Generated headers / files
+generated/
+*.gen.*
+
+# Software build artifacts
+sw/build/
+sw/bin/
+sw/out/
+*.o
+*.a
+*.so
+
+# Coverage
+coverage/
+*.cov
+*.ucdb
+*.gcda
+*.gcno
+
+# Wave dumps
+*.vcd
+*.vpd
+*.fsdb
+
+# Temporary scratch files
+*.tmp
+*.bak

@@ -1,0 +1,1 @@
+Thoroughly read AGENTS.md found in the project root.
