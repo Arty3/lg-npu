@@ -9,15 +9,15 @@ as possible:
 | Aspect | Decision |
 |--------|----------|
 | Data type | INT8 (signed 8-bit) exclusively. Weights, activations, and biases are all INT8; the MAC array accumulates into INT32, and a post-processing quantize step converts the result back to INT8. |
-| Compute | 2D convolution only. No GEMM, pooling, element-wise, or attention operations. |
+| Compute | 2D convolution and general matrix multiply (GEMM). No pooling, element-wise, or attention operations. |
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
-| Command interface | One opcode (`CONV`). Software submits a descriptor that fully describes a single convolution tile. |
+| Command interface | Two opcodes (`CONV`, `GEMM`). Software submits a descriptor that fully describes a single convolution tile or matrix multiply. |
 | Memory | Local on-chip SRAM only (weight buffer, activation buffer, partial-sum buffer). No external DRAM path; no DMA transfers. Software pre-loads buffers before issuing the command. |
 | Platform | Simulation-only. No FPGA or ASIC bring-up. |
 
 These constraints mean the first passing test is: software writes INT8 weights
-and activations into the local buffers over MMIO, posts a single `CONV`
-command, waits for completion, and reads the INT8 result back from the
+and activations into the local buffers over MMIO, posts a single `CONV` or
+`GEMM` command, waits for completion, and reads the INT8 result back from the
 activation buffer.
 
 ---
@@ -43,16 +43,19 @@ graph TD
             sched["npu_scheduler"]
             dispatch["npu_dispatch"]
             mem_top["npu_mem_top (buffers)"]
-            conv["conv_backend (PE array)"]
+            gemm["gemm_backend"]
+            conv["conv_backend"]
             completion["npu_completion"]
         end
 
         q -- cmd_if --> sched
         rb -- "config / status" --> sched
         sched --> dispatch
-        dispatch --> mem_top
-        dispatch --> conv
+        dispatch -- "OP_GEMM" --> gemm
+        dispatch -- "OP_CONV" --> conv
+        gemm <--> mem_top
         conv <--> mem_top
+        gemm --> completion
         conv --> completion
         mem_top --> completion
 
@@ -92,9 +95,10 @@ Memory-mapped control/status register file. Provides:
 | `npu_cmd_decode` | Validates the opcode and extracts fields into an internal command struct. Exposes a `busy` output so the pipeline knows a decode is in flight. |
 | `npu_queue` | Shallow FIFO (depth configurable, default 4) that holds decoded commands until the core is ready. |
 
-Only one opcode is defined: `CONV`. The descriptor carries the tensor base
-addresses (offsets into local SRAM), spatial dimensions (H, W, C, K, R, S),
-and stride/padding values.
+Only two opcodes are defined: `CONV` and `GEMM`. Both share the same
+16-word descriptor layout; GEMM maps its fields (M, N, K, base addresses)
+onto the same word positions as the convolution parameters. See
+[command_format.md](../spec/command_format.md) for the full layout.
 
 ### Core (`rtl/core/npu_core.sv`)
 
@@ -103,7 +107,7 @@ Orchestrates command execution.
 | Module | Role |
 |--------|------|
 | `npu_scheduler` | Picks the next command from the queue. In the current scope this is trivial — in-order, one at a time. |
-| `npu_dispatch` | Translates the command into a sequence of control signals for the memory subsystem and compute backend. |
+| `npu_dispatch` | Routes the command to the appropriate backend based on opcode. GEMM commands are checked first. Memory port signals are muxed via a registered backend selector. |
 | `npu_completion` | Tracks when the backend signals done, writes a completion entry, and triggers `npu_irq_ctrl`. |
 | `npu_status` | Aggregates internal state into the status register read by the host. The idle flag accounts for backend busy, queue occupancy, **and** `cmd_pipe_busy` (fetch or decode in progress), preventing the host from seeing a false idle while a command is still being ingested. |
 
@@ -127,7 +131,8 @@ leaves the buffers exclusively over the host MMIO path.
 
 ### Convolution Backend (`rtl/backends/conv/`)
 
-The compute engine. Described in detail in [conv_dataflow.md](conv_dataflow.md).
+The convolution compute engine. Described in detail in
+[conv_dataflow.md](conv_dataflow.md).
 
 | Module | Role |
 |--------|------|
@@ -145,6 +150,23 @@ The compute engine. Described in detail in [conv_dataflow.md](conv_dataflow.md).
 | `conv_quantize` | Requantizes the INT32 accumulator back to INT8 (shift + saturate). |
 | `conv_postproc` | Chains bias -> activation -> quantize into a single post-processing pipeline stage. |
 | `conv_writer` | Writes the final INT8 output tile back into the activation buffer. |
+
+### GEMM Backend (`rtl/backends/gemm/`)
+
+General matrix multiply engine. Reuses the convolution PE array,
+accumulator, post-processing chain, loader, and writer via a GEMM-specific
+control and address generation front-end. Described in detail in
+[conv_dataflow.md](conv_dataflow.md#gemm-dataflow).
+
+| Module | Role |
+|--------|------|
+| `gemm_backend` | Top-level backend wrapper. Accepts a dispatch command and drives the GEMM datapath. |
+| `gemm_ctrl` | 3-deep loop sequencer FSM (m, n, k). |
+| `gemm_addr_gen` | Computes row-major addresses for A\[m,k\] and B\[k,n\]. |
+
+Shared modules (`conv_loader`, `conv_array`, `conv_accum`, `conv_postproc`,
+`conv_writer`) are reused from the convolution backend. The loader runs
+with zero-padding disabled.
 
 ### Interrupt & Reset (`rtl/control/`)
 
@@ -191,32 +213,31 @@ No floating-point hardware exists anywhere in the design.
 
 ---
 
-## Execution Flow (Single Convolution)
+## Execution Flow
 
 1. **Load** — Host writes INT8 weight and activation data into the local SRAM
    buffers through the MMIO buffer windows in `npu_reg_block`.
-2. **Submit** — Host writes a `CONV` command descriptor into the command queue
-   and rings the doorbell register.
+2. **Submit** — Host writes a `CONV` or `GEMM` command descriptor into the
+   command queue and rings the doorbell register.
 3. **Fetch & Decode** — `npu_cmd_fetch` reads the descriptor;
    `npu_cmd_decode` validates the opcode and packs the fields.
 4. **Schedule & Dispatch** — `npu_scheduler` selects the command;
-   `npu_dispatch` programs the conv backend and memory addresses.
-5. **Compute** — `conv_ctrl` sequences through the output tile. For each
-   output pixel, the PE array multiplies the weight window by the
-   activation window, accumulates across input channels, applies
-   post-processing (bias -> activation -> quantize), and writes the INT8 result
-   back to the activation buffer.
+   `npu_dispatch` routes it to the appropriate backend based on opcode
+   (GEMM first, then convolution).
+5. **Compute** — The selected backend sequences through its loop nest,
+   accumulates into INT32, applies post-processing (bias -> activation ->
+   quantize), and writes the INT8 result back to the activation buffer.
 6. **Complete** — `npu_completion` records the done event and triggers
    `npu_irq_ctrl`.
-7. **Read-back** — Host reads the INT8 output activations from the
-   activation buffer through the MMIO window.
+7. **Read-back** — Host reads the INT8 output from the activation buffer
+   through the MMIO window.
 
 ---
 
 ## What Is Explicitly Out Of Scope
 
 - Additional data types (FP16, BF16, INT4, INT16).
-- Operations beyond 2D convolution (pooling, GEMM, element-wise, softmax).
+- Operations beyond 2D convolution and GEMM (pooling, element-wise, softmax).
 - Multiple tensor layouts or layout conversion.
 - External memory (DRAM) and the DMA subsystem.
 - Multi-command pipelining or out-of-order execution.

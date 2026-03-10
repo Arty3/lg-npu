@@ -58,6 +58,11 @@ rtl/memory/npu_dma_writer.sv
 rtl/memory/npu_dma_frontend.sv
 rtl/memory/npu_scratchpad.sv
 
+// --- GEMM backend -----------------------------------------------------------
+rtl/backends/gemm/gemm_addr_gen.sv
+rtl/backends/gemm/gemm_ctrl.sv
+rtl/backends/gemm/gemm_backend.sv
+
 // --- Convolution backend ----------------------------------------------------
 rtl/backends/conv/conv_pe.sv
 rtl/backends/conv/conv_array.sv

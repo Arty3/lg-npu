@@ -1,8 +1,8 @@
-# Convolution Dataflow
+# Compute Dataflow
 
-This document describes the execution model and data movement for a single
-2D convolution operation inside the lg-npu compute backend
-(`rtl/backends/conv/`).
+This document describes the execution model and data movement for the
+lg-npu compute backends: 2D convolution (`rtl/backends/conv/`) and general
+matrix multiply (`rtl/backends/gemm/`).
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -279,3 +279,79 @@ oh=1, ow=1: act[1,1] wt[0,0,0]  ...
 No DMA or external memory interaction occurs. The host is responsible for
 filling the weight and activation buffers over MMIO before submitting the
 command, and for reading the results back afterwards.
+
+---
+
+## GEMM Dataflow
+
+The GEMM backend (`rtl/backends/gemm/`) performs general matrix
+multiplication: C = A * B + bias, where A is M x K, B is K x N, and bias
+is a length-N vector. All matrices are row-major INT8 in local SRAM.
+
+The GEMM backend reuses the convolution PE array, accumulator,
+post-processing chain (bias -> activation -> quantize), loader, and writer.
+Only the control FSM and address generation are GEMM-specific.
+
+### GEMM Parameters
+
+| Symbol | Meaning |
+|--------|---------|
+| M | Number of rows in A / rows in C |
+| N | Number of columns in B / columns in C |
+| K | Number of columns in A / rows in B (reduction dimension) |
+
+### Loop Nest
+
+`gemm_ctrl` implements a 3-deep loop nest:
+
+```
+for m in 0 .. M-1:            // output row
+  for n in 0 .. N-1:          // output column
+    acc = 0                    // INT32
+    for k in 0 .. K-1:        // reduction
+      acc += A[m, k] * B[k, n]  // INT8 x INT8 -> INT32
+    // post-processing
+    acc += bias[n]             // INT32 += sign_ext(INT8)
+    acc  = activate(acc, mode) // ReLU / None / Leaky ReLU
+    C[m, n] = quantize(acc)    // INT32 -> INT8
+```
+
+The inner loop (k) accumulates into a single INT32 partial sum. Once the
+reduction is complete for a given (m, n), post-processing runs identically
+to convolution.
+
+### Address Generation
+
+`gemm_addr_gen` computes SRAM read addresses from the current loop indices:
+
+- **A address**: `a_base + m * K + k` (row-major M x K in activation buffer)
+- **B address**: `b_base + k * N + n` (row-major K x N in weight buffer)
+
+No zero-padding is applied; the loader is instantiated with `zero_pad = 0`.
+
+### Output Addressing
+
+- **C address**: `c_base + m * N + n`
+- **Bias address**: `bias_base + n` (per-column, unlike convolution's per-filter bias)
+
+### FSM States
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> LOAD_CFG : cmd_if valid
+    LOAD_CFG --> COMPUTE : parameters latched
+    COMPUTE --> COMPUTE : next iteration
+    COMPUTE --> DRAIN : last iteration issued
+    DRAIN --> DONE : pipeline empty
+    DONE --> IDLE : completion handshake
+```
+
+### Backend Muxing
+
+`npu_core` uses a registered backend selector (`gemm_sel_r`) to mux
+memory port signals between the GEMM and convolution backends. The selector
+is set when a GEMM command is accepted and cleared when a convolution
+command is accepted. This avoids combinational loops through the memory
+subsystem while ensuring only the active backend drives the shared memory
+ports.

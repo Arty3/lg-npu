@@ -92,7 +92,8 @@ module npu_cmd_decode
             cmd_r <= '0;
             err_r <= 1'b0;
         end else if (state == S_CHECK) begin
-            err_r <= (desc_regs[0][3:0] != OP_CONV);
+            err_r <= (desc_regs[0][3:0] != OP_CONV) &&
+                     (desc_regs[0][3:0] != OP_GEMM);
             cmd_r.opcode       <= opcode_e'(desc_regs[0][3:0]);
             cmd_r.act_in_addr  <= desc_regs[1][ADDR_W-1:0];
             cmd_r.act_out_addr <= desc_regs[2][ADDR_W-1:0];

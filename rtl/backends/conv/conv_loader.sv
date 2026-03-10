@@ -77,11 +77,19 @@ module conv_loader
             state <= state_next;
     end
 
+    // Request generation (depends only on registered state, not grants)
     always_comb begin
-        state_next  = state;
         act_mem_req = 1'b0;
         wt_mem_req  = 1'b0;
+        if (state == S_REQ && !is_zero_pad_r) begin
+            act_mem_req = ~act_latched;
+            wt_mem_req  = ~wt_latched;
+        end
+    end
 
+    // State transitions (grant signals feed only into registered state_next)
+    always_comb begin
+        state_next = state;
         case (state)
             S_IDLE: begin
                 if (load_valid)
@@ -89,14 +97,10 @@ module conv_loader
             end
             S_REQ: begin
                 if (is_zero_pad_r) begin
-                    // No memory read needed, proceed directly
                     state_next = S_DONE;
-                end else begin
-                    act_mem_req = ~act_latched;
-                    wt_mem_req  = ~wt_latched;
-                    if ((act_latched || act_mem_gnt) &&
-                        (wt_latched  || wt_mem_gnt))
-                        state_next = S_WAIT;
+                end else if ((act_latched || act_mem_gnt) &&
+                             (wt_latched  || wt_mem_gnt)) begin
+                    state_next = S_WAIT;
                 end
             end
             S_WAIT: begin

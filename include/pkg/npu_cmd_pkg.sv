@@ -6,10 +6,11 @@ package npu_cmd_pkg;
 
     import npu_types_pkg::*;
 
-    // Opcode enum (single opcode for now)
+    // Opcode enum
     typedef enum logic [3:0]
 	{
-        OP_CONV = 4'h1
+        OP_CONV = 4'h1,
+        OP_GEMM = 4'h2
     }   opcode_e;
 
     // Convolution command descriptor

@@ -56,7 +56,7 @@ struct ConvDesc
     uint32_t stride_h, stride_w;
     uint32_t pad_h, pad_w;
     uint32_t quant_shift;
-    uint32_t act_mode;      // 0=ReLU (default), 1=None, 2=Leaky ReLU
+    uint32_t act_mode;      // 0=None (default), 1=ReLU, 2=Leaky ReLU
 
     void to_words(uint32_t out[16]) const
     {
@@ -79,6 +79,35 @@ struct ConvDesc
     }
 };
 
+// GEMM command descriptor (16 words, same transport as ConvDesc)
+struct GemmDesc
+{
+    uint32_t opcode    = 2;  // OP_GEMM
+    uint32_t a_addr    = 0;  // Matrix A base (activation buffer)
+    uint32_t c_addr    = 0;  // Output matrix C base (activation buffer)
+    uint32_t b_addr    = 0;  // Matrix B base (weight buffer)
+    uint32_t bias_addr = 0;  // Bias vector base (weight buffer)
+    uint32_t m_dim     = 0;
+    uint32_t n_dim     = 0;
+    uint32_t k_dim     = 0;
+    uint32_t quant_shift = 0;
+    uint32_t act_mode    = 0; // ACT_MODE_NONE
+
+    void to_words(uint32_t out[16]) const
+    {
+        std::memset(out, 0, sizeof(uint32_t) * 16);
+        out[0]  = opcode;
+        out[1]  = a_addr;
+        out[2]  = c_addr;
+        out[3]  = b_addr;
+        out[4]  = bias_addr;
+        out[5]  = m_dim;
+        out[6]  = n_dim;
+        out[7]  = k_dim;
+        out[15] = (quant_shift & 0x1F) | ((act_mode & 0x3) << 5);
+    }
+};
+
 // Activation mode constants (match act_mode_e in npu_types_pkg.sv)
 static constexpr uint32_t ACT_MODE_NONE       = 0;
 static constexpr uint32_t ACT_MODE_RELU       = 1;
@@ -86,6 +115,47 @@ static constexpr uint32_t ACT_MODE_LEAKY_RELU = 2;
 
 // Leaky ReLU shift (must match LEAKY_SHIFT in npu_types_pkg.sv)
 static constexpr int LEAKY_SHIFT = 3;
+
+// C++ reference GEMM: C = A * B + bias (INT8 -> INT32 accum -> INT8 out)
+//   A is row-major M x K, B is row-major K x N, bias is length N.
+inline std::vector<int8_t> ref_gemm(
+    const std::vector<int8_t> &a,
+    const std::vector<int8_t> &b,
+    const std::vector<int8_t> &bias,
+    int M, int N, int K,
+    int quant_shift,
+    uint32_t act_mode = ACT_MODE_NONE)
+{
+    std::vector<int8_t> out(M * N);
+    for (int m = 0; m < M; ++m)
+    {
+        for (int n = 0; n < N; ++n)
+        {
+            int32_t acc = 0;
+            for (int k = 0; k < K; ++k)
+                acc += static_cast<int32_t>(a[m * K + k])
+                     * static_cast<int32_t>(b[k * N + n]);
+            // Bias
+            if (!bias.empty())
+                acc += static_cast<int32_t>(bias[n]);
+            // Activation
+            if (act_mode == ACT_MODE_RELU)
+            {
+                if (acc < 0) acc = 0;
+            }
+            else if (act_mode == ACT_MODE_LEAKY_RELU)
+            {
+                if (acc < 0) acc >>= LEAKY_SHIFT;
+            }
+            // Quantize
+            acc >>= quant_shift;
+            if (acc > 127) acc = 127;
+            if (acc < -128) acc = -128;
+            out[m * N + n] = static_cast<int8_t>(acc);
+        }
+    }
+    return out;
+}
 
 // C++ reference convolution (INT8 in -> INT32 accum -> INT8 out)
 inline std::vector<int8_t> ref_conv(
@@ -302,6 +372,17 @@ public:
         run_clocks(2000);
     }
 
+    // Submit a GEMM command and ring the doorbell
+    void submit_gemm(const GemmDesc &desc)
+    {
+        uint32_t words[16];
+        desc.to_words(words);
+        for (int i = 0; i < 16; ++i)
+            mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+        mmio_write(REG_DOORBELL, 1);
+        run_clocks(2000);
+    }
+
     // Wait for the NPU to become idle, with a cycle timeout.
     // Returns true if idle was reached, false on timeout.
     bool wait_idle(int max_polls = 200000)
@@ -389,6 +470,78 @@ public:
 
         // Read back and compare
         auto got = read_bytes(ACT_BUF_BASE + act_out_addr, out_size);
+        bool pass = true;
+        for (int i = 0; i < out_size; ++i)
+        {
+            if (got[i] != expected[i])
+            {
+                printf("  [FAIL] %s: output[%d] expected %d, got %d\n",
+                       name, i, expected[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // Run a GEMM end-to-end: load data, fire command, wait, read back.
+    // Returns true on match with expected output.
+    bool run_gemm_test(
+        const char *name,
+        const std::vector<int8_t> &a,
+        const std::vector<int8_t> &b,
+        const std::vector<int8_t> &bias,
+        int M, int N, int K,
+        int qshift,
+        uint32_t act_mode  = ACT_MODE_NONE,
+        uint32_t a_addr    = 0,
+        uint32_t b_addr    = 0,
+        uint32_t bias_addr = 0,
+        uint32_t c_addr    = 2048)
+    {
+        auto expected = ref_gemm(a, b, bias, M, N, K, qshift, act_mode);
+        int out_size = static_cast<int>(expected.size());
+
+        // Load B matrix into weight buffer
+        load_bytes(WEIGHT_BUF_BASE + b_addr, b);
+
+        // Place bias after B to avoid overlap
+        bias_addr = b_addr + static_cast<uint32_t>(b.size());
+        if (!bias.empty())
+        {
+            load_bytes(WEIGHT_BUF_BASE + bias_addr, bias);
+        }
+        else
+        {
+            for (int i = 0; i < N; ++i)
+                mmio_write(WEIGHT_BUF_BASE + bias_addr
+                           + static_cast<uint32_t>(i), 0);
+        }
+
+        // Load A matrix into activation buffer
+        load_bytes(ACT_BUF_BASE + a_addr, a);
+
+        // Build and submit command
+        GemmDesc desc{};
+        desc.a_addr      = a_addr;
+        desc.c_addr      = c_addr;
+        desc.b_addr      = b_addr;
+        desc.bias_addr   = bias_addr;
+        desc.m_dim       = static_cast<uint32_t>(M);
+        desc.n_dim       = static_cast<uint32_t>(N);
+        desc.k_dim       = static_cast<uint32_t>(K);
+        desc.quant_shift = static_cast<uint32_t>(qshift);
+        desc.act_mode    = act_mode;
+        submit_gemm(desc);
+
+        if (!wait_idle())
+        {
+            printf("  [FAIL] %s: TIMEOUT waiting for idle\n", name);
+            return false;
+        }
+
+        auto got = read_bytes(ACT_BUF_BASE + c_addr, out_size);
         bool pass = true;
         for (int i = 0; i < out_size; ++i)
         {

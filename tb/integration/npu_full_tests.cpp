@@ -5,6 +5,8 @@
 //   2. Edge-value / saturation distribution tests
 //   3. Dimension sweeps (H, W, C, K, R, S, stride, pad)
 //   4. Invalid-command combinations
+//   5. Activation function tests
+//   6. GEMM tests
 
 #include "npu_tb.h"
 
@@ -606,8 +608,8 @@ static void run_invalid_command_tests(TestResult &r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
-    // 4a: Bad opcodes (0, 2..15)
-    for (int op : {0, 2, 3, 7, 15})
+    // 4a: Bad opcodes (0, 3..15)
+    for (int op : {0, 3, 7, 15})
     {
         NpuTb tb;
         tb.reset();
@@ -995,6 +997,133 @@ static void run_activation_tests(TestResult &r)
     }
 }
 
+// Section 6: GEMM tests
+static void run_gemm_tests(TestResult &r)
+{
+    printf("\n--- GEMM Tests ---\n\n");
+
+    // 6a: 2x2 * 2x2, all ones, no bias, no activation
+    //     Each output = sum of 2 products of 1*1 = 2
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = const_fill(2 * 2, 1);
+        auto b = const_fill(2 * 2, 1);
+        r.record(tb.run_gemm_test("gemm 2x2 ones", a, b, {}, 2, 2, 2, 0));
+    }
+
+    // 6b: 2x3 * 3x2, sequential A, all-one B, no bias
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = seq_fill(2 * 3, 1);   // [1,2,3, 4,5,6]
+        auto b = const_fill(3 * 2, 1);
+        r.record(tb.run_gemm_test("gemm 2x3 * 3x2 seq", a, b, {}, 2, 2, 3, 0));
+    }
+
+    // 6c: 3x4 * 4x2 with bias
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a    = seq_fill(3 * 4, 1);
+        auto b    = const_fill(4 * 2, 2);
+        auto bias = std::vector<int8_t>{10, -10};
+        r.record(tb.run_gemm_test("gemm 3x4 * 4x2 bias", a, b, bias,
+                                  3, 2, 4, 0));
+    }
+
+    // 6d: 2x3 * 3x4 with ReLU activation (negative value row)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = std::vector<int8_t>{ 1, 2, 3, -1, -2, -3 };
+        auto b = const_fill(3 * 4, 1);
+        r.record(tb.run_gemm_test("gemm 2x3 * 3x4 relu", a, b, {},
+                                  2, 4, 3, 0, ACT_MODE_RELU));
+    }
+
+    // 6e: 2x3 * 3x4 with Leaky ReLU
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = std::vector<int8_t>{ 1, 2, 3, -8, -16, -24 };
+        auto b = const_fill(3 * 4, 1);
+        r.record(tb.run_gemm_test("gemm 2x3 * 3x4 leaky", a, b, {},
+                                  2, 4, 3, 0, ACT_MODE_LEAKY_RELU));
+    }
+
+    // 6f: 4x8 * 8x3 with quantization shift
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = seq_fill(4 * 8, 1);
+        auto b = const_fill(8 * 3, 1);
+        r.record(tb.run_gemm_test("gemm 4x8 * 8x3 qshift=3", a, b, {},
+                                  4, 3, 8, 3));
+    }
+
+    // 6g: 1x1 * 1x1 scalar multiply
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = std::vector<int8_t>{ 7 };
+        auto b = std::vector<int8_t>{ 11 };
+        r.record(tb.run_gemm_test("gemm 1x1 scalar", a, b, {}, 1, 1, 1, 0));
+    }
+
+    // 6h: 8x8 * 8x8 larger test
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = seq_fill(8 * 8, 1);
+        auto b = seq_fill(8 * 8, 1);
+        r.record(tb.run_gemm_test("gemm 8x8 * 8x8", a, b, {},
+                                  8, 8, 8, 7));
+    }
+
+    // 6i: saturation test (large values accumulate to >127 or <-128)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = const_fill(2 * 4, 127);
+        auto b = const_fill(4 * 2, 127);
+        // acc = 4 * 127 * 127 = 64516 per element; qshift=9 -> 64516>>9 = 126
+        r.record(tb.run_gemm_test("gemm saturation", a, b, {},
+                                  2, 2, 4, 9));
+    }
+
+    // 6j: GEMM then conv on same instance (backend interleave)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // First: GEMM 2x2 * 2x2
+        auto ga = const_fill(2 * 2, 3);
+        auto gb = const_fill(2 * 2, 2);
+        bool gemm_ok = tb.run_gemm_test("gemm-then-conv (gemm)",
+                                        ga, gb, {}, 2, 2, 2, 0);
+
+        // Second: conv 4x4x1 k3
+        auto ca  = seq_fill(4 * 4, 1);
+        auto cwt = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("gemm-then-conv (conv)",
+                                        ca, cwt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        r.record(gemm_ok && conv_ok);
+    }
+}
+
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
@@ -1011,6 +1140,7 @@ int main(int argc, char **argv)
     run_edge_value_tests(r);
     run_dimension_sweeps(r);
     run_activation_tests(r);
+    run_gemm_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");
