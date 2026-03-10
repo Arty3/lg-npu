@@ -7,6 +7,7 @@ package npu_addrmap_pkg;
 
     import npu_types_pkg::*;
 
+
     // Register offsets (MMIO byte addresses)
     localparam logic [MMIO_ADDR_W-1:0] REG_CTRL         = 20'h0_0000;
     localparam logic [MMIO_ADDR_W-1:0] REG_STATUS       = 20'h0_0004;
@@ -18,9 +19,14 @@ package npu_addrmap_pkg;
     localparam logic [MMIO_ADDR_W-1:0] REG_PERF_CYCLES  = 20'h0_0020;
     localparam logic [MMIO_ADDR_W-1:0] REG_PERF_ACTIVE  = 20'h0_0024;
     localparam logic [MMIO_ADDR_W-1:0] REG_PERF_STALL   = 20'h0_0028;
+    localparam logic [MMIO_ADDR_W-1:0] REG_DMA_EXT_ADDR = 20'h0_0030;
+    localparam logic [MMIO_ADDR_W-1:0] REG_DMA_LOC_ADDR = 20'h0_0034;
+    localparam logic [MMIO_ADDR_W-1:0] REG_DMA_LEN      = 20'h0_0038;
+    localparam logic [MMIO_ADDR_W-1:0] REG_DMA_CTRL     = 20'h0_003C;
+    localparam logic [MMIO_ADDR_W-1:0] REG_DMA_STATUS   = 20'h0_0040;
 
     // Command queue window
-    localparam logic [MMIO_ADDR_W-1:0] CMD_QUEUE_BASE   = 20'h0_1000;
+    localparam logic [MMIO_ADDR_W-1:0] CMD_QUEUE_BASE  = 20'h0_1000;
     localparam int                     CMD_ENTRY_BYTES  = 64;
 
     // Buffer windows
@@ -29,12 +35,22 @@ package npu_addrmap_pkg;
     localparam logic [MMIO_ADDR_W-1:0] PSUM_BUF_BASE    = 20'h3_0000;
 
     // Control register bit fields
-    localparam int CTRL_SOFT_RESET_BIT                  = 0;
-    localparam int CTRL_ENABLE_BIT                      = 1;
+    localparam int CTRL_SOFT_RESET_BIT  = 0;
+    localparam int CTRL_ENABLE_BIT      = 1;
 
     // Status register bit fields
-    localparam int STATUS_IDLE_BIT                      = 0;
-    localparam int STATUS_BUSY_BIT                      = 1;
-    localparam int STATUS_QUEUE_FULL                    = 2;
+    localparam int STATUS_IDLE_BIT      = 0;
+    localparam int STATUS_BUSY_BIT      = 1;
+    localparam int STATUS_QUEUE_FULL    = 2;
+
+    // DMA control register bit fields
+    localparam int DMA_CTRL_START_BIT   = 0;
+    localparam int DMA_CTRL_DIR_BIT     = 1;
+
+    /* verilator lint_off UNUSEDPARAM */
+
+    // DMA status register bit fields
+    localparam int DMA_STATUS_BUSY_BIT  = 0;
+    /* verilator lint_on UNUSEDPARAM */
 
 endpackage : npu_addrmap_pkg

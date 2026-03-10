@@ -12,7 +12,7 @@ Source of truth: `include/pkg/npu_addrmap_pkg.sv`.
 
 | Region | Base | Size | Description |
 |--------|------|------|-------------|
-| Registers | `0x0_0000` | 256 B | Control, status, IRQ, perf counters |
+| Registers | `0x0_0000` | 256 B | Control, status, IRQ, perf counters, DMA |
 | Command queue | `0x0_1000` | 64 B | Single 16-word command descriptor window |
 | Weight buffer | `0x1_0000` | 4 KB | INT8 weight SRAM (MMIO window) |
 | Activation buffer | `0x2_0000` | 8 KB | INT8 activation SRAM (MMIO window) |
@@ -34,6 +34,11 @@ Source of truth: `include/pkg/npu_addrmap_pkg.sv`.
 | `0x0020` | `PERF_CYCLES` | RO | Total clock cycles since last clear |
 | `0x0024` | `PERF_ACTIVE` | RO | Backend-active cycles |
 | `0x0028` | `PERF_STALL` | RO | Backend-stall cycles |
+| `0x0030` | `DMA_EXT_ADDR` | RW | DMA external memory base address |
+| `0x0034` | `DMA_LOC_ADDR` | RW | DMA local buffer base address |
+| `0x0038` | `DMA_LEN` | RW | DMA transfer length in bytes |
+| `0x003C` | `DMA_CTRL` | WO | DMA control (start / direction) |
+| `0x0040` | `DMA_STATUS` | RO | DMA status |
 
 ---
 
@@ -105,3 +110,30 @@ INT8 buffers only the low byte is significant.
 | Psum | `0x3_0000` | `npu_psum_buffer` | 32-bit |
 
 Reads from unallocated register offsets return zero.
+
+---
+
+## DMA Registers
+
+The DMA engine is controlled through five registers. Software configures the
+external address, local address, and length, then writes to `DMA_CTRL` to
+trigger the transfer.
+
+### DMA_CTRL Register (`0x003C`)
+
+| Bit | Name | Description |
+|-----|------|-------------|
+| 0 | `START` | Write 1 to begin transfer (self-clearing pulse, reads 0) |
+| 1 | `DIR` | Direction: 0 = read (ext -> local), 1 = write (local -> ext) |
+| 31:2 | -- | Reserved |
+
+### DMA_STATUS Register (`0x0040`)
+
+| Bit | Name | Description |
+|-----|------|-------------|
+| 0 | `BUSY` | 1 while a DMA transfer is in progress |
+| 31:1 | -- | Reserved |
+
+A DMA completion generates an interrupt (OR'd with command done into
+`IRQ_STATUS`). DMA and compute are mutually exclusive; the status register
+reports the core as busy while DMA is active.

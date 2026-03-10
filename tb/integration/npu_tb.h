@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // Address map (matches npu_addrmap_pkg.sv)
@@ -28,6 +29,11 @@ static constexpr uint32_t REG_FEATURE_ID  = 0x00018;
 static constexpr uint32_t REG_PERF_CYCLES = 0x00020;
 static constexpr uint32_t REG_PERF_ACTIVE = 0x00024;
 static constexpr uint32_t REG_PERF_STALL  = 0x00028;
+static constexpr uint32_t REG_DMA_EXT_ADDR = 0x00030;
+static constexpr uint32_t REG_DMA_LOC_ADDR = 0x00034;
+static constexpr uint32_t REG_DMA_LEN      = 0x00038;
+static constexpr uint32_t REG_DMA_CTRL     = 0x0003C;
+static constexpr uint32_t REG_DMA_STATUS   = 0x00040;
 static constexpr uint32_t CMD_QUEUE_BASE  = 0x01000;
 static constexpr uint32_t WEIGHT_BUF_BASE = 0x10000;
 static constexpr uint32_t ACT_BUF_BASE    = 0x20000;
@@ -41,6 +47,10 @@ static constexpr uint32_t CTRL_ENABLE_BIT     = 1;
 static constexpr uint32_t STATUS_IDLE_BIT       = 0;
 static constexpr uint32_t STATUS_BUSY_BIT       = 1;
 static constexpr uint32_t STATUS_QUEUE_FULL_BIT = 2;
+
+// DMA control bits
+static constexpr uint32_t DMA_CTRL_START_BIT = 0;
+static constexpr uint32_t DMA_CTRL_DIR_BIT   = 1;
 
 // Convolution command descriptor (16 words)
 struct ConvDesc
@@ -594,9 +604,49 @@ class NpuTb
     uint64_t       sim_time;
     bool           trace_enabled;
 
+    // External memory model
+    std::unordered_map<uint32_t, uint32_t> ext_memory;
+    bool     ext_rd_pending;
+    uint32_t ext_rd_addr_pending;
+
+    void update_ext_mem()
+    {
+        // Drive read response from previous cycle
+        if (ext_rd_pending)
+        {
+            dut->ext_mem_rvalid = 1;
+            auto it = ext_memory.find(ext_rd_addr_pending);
+            dut->ext_mem_rdata = (it != ext_memory.end()) ? it->second : 0;
+            ext_rd_pending = false;
+        }
+        else
+        {
+            dut->ext_mem_rvalid = 0;
+            dut->ext_mem_rdata  = 0;
+        }
+
+        // Instant grant
+        dut->ext_mem_gnt = dut->ext_mem_req;
+
+        // Handle current request
+        if (dut->ext_mem_req)
+        {
+            if (dut->ext_mem_wr)
+            {
+                ext_memory[dut->ext_mem_addr] = dut->ext_mem_wdata;
+            }
+            else
+            {
+                ext_rd_pending      = true;
+                ext_rd_addr_pending = dut->ext_mem_addr;
+            }
+        }
+    }
+
 public:
     explicit NpuTb(const char *vcd_path = nullptr)
-        : sim_time(0), trace_enabled(vcd_path != nullptr)
+        : sim_time(0), trace_enabled(vcd_path != nullptr),
+          ext_rd_pending(false), ext_rd_addr_pending(0)
     {
         dut = new Vnpu_shell;
         if (trace_enabled)
@@ -630,6 +680,7 @@ public:
         dut->clk = 0;
         dut->eval();
         if (trace) trace->dump(sim_time++);
+        update_ext_mem();
         dut->clk = 1;
         dut->eval();
         if (trace) trace->dump(sim_time++);
@@ -637,11 +688,15 @@ public:
 
     void reset(int cycles = 10)
     {
-        dut->rst_async_n = 0;
-        dut->mmio_valid  = 0;
-        dut->mmio_wr     = 0;
-        dut->mmio_addr   = 0;
-        dut->mmio_wdata  = 0;
+        dut->rst_async_n    = 0;
+        dut->mmio_valid     = 0;
+        dut->mmio_wr        = 0;
+        dut->mmio_addr      = 0;
+        dut->mmio_wdata     = 0;
+        dut->ext_mem_gnt    = 0;
+        dut->ext_mem_rdata  = 0;
+        dut->ext_mem_rvalid = 0;
+        ext_rd_pending = false;
         for (int i = 0; i < cycles; ++i) tick();
         dut->rst_async_n = 1;
         tick(); tick();
@@ -1158,6 +1213,136 @@ public:
         }
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // External memory model helpers
+    void ext_store(uint32_t addr, uint32_t data)
+    {
+        ext_memory[addr] = data;
+    }
+
+    uint32_t ext_load(uint32_t addr)
+    {
+        auto it = ext_memory.find(addr);
+        return (it != ext_memory.end()) ? it->second : 0;
+    }
+
+    void ext_load_bytes(uint32_t base, const int8_t *data, int count)
+    {
+        for (int i = 0; i < count; ++i)
+            ext_memory[base + static_cast<uint32_t>(i)] =
+                static_cast<uint32_t>(static_cast<uint8_t>(data[i]));
+    }
+
+    void ext_load_bytes(uint32_t base, const std::vector<int8_t> &data)
+    {
+        ext_load_bytes(base, data.data(), static_cast<int>(data.size()));
+    }
+
+    std::vector<int8_t> ext_read_bytes(uint32_t base, int count)
+    {
+        std::vector<int8_t> out(count);
+        for (int i = 0; i < count; ++i)
+        {
+            auto it = ext_memory.find(base + static_cast<uint32_t>(i));
+            uint32_t raw = (it != ext_memory.end()) ? it->second : 0;
+            out[i] = static_cast<int8_t>(raw & 0xFF);
+        }
+        return out;
+    }
+
+    // Start a DMA transfer and wait for idle.
+    // dir=0: ext->local (read), dir=1: local->ext (write)
+    bool dma_transfer(uint32_t ext_addr, uint32_t loc_addr,
+                      uint32_t len, uint32_t dir, int max_polls = 200000)
+    {
+        mmio_write(REG_DMA_EXT_ADDR, ext_addr);
+        mmio_write(REG_DMA_LOC_ADDR, loc_addr);
+        mmio_write(REG_DMA_LEN, len);
+        mmio_write(REG_DMA_CTRL, (1u << DMA_CTRL_START_BIT)
+                                | ((dir & 1u) << DMA_CTRL_DIR_BIT));
+        run_clocks(4);
+        return wait_idle(max_polls);
+    }
+
+    // Run a DMA read test: load data into ext memory, DMA to local buffer,
+    // read back via MMIO and compare.
+    bool run_dma_read_test(
+        const char *name,
+        const std::vector<int8_t> &data,
+        uint32_t ext_addr,
+        uint32_t loc_mmio_addr)
+    {
+        int count = static_cast<int>(data.size());
+
+        // Place data in external memory
+        ext_load_bytes(ext_addr, data);
+
+        // DMA read (ext -> local)
+        if (!dma_transfer(ext_addr, loc_mmio_addr, static_cast<uint32_t>(count), 0))
+        {
+            printf("  [FAIL] %s: DMA read TIMEOUT\n", name);
+            return false;
+        }
+
+        // Clear IRQ
+        mmio_write(REG_IRQ_CLEAR, 1);
+
+        // Read back from local buffer via MMIO and compare
+        auto got = read_bytes(loc_mmio_addr, count);
+        bool pass = true;
+        for (int i = 0; i < count; ++i)
+        {
+            if (got[i] != data[i])
+            {
+                printf("  [FAIL] %s: byte[%d] expected %d, got %d\n",
+                       name, i, data[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d bytes verified)\n", name, count);
+        return pass;
+    }
+
+    // Run a DMA write test: load data into local buffer via MMIO, DMA to ext
+    // memory, read back from ext model and compare.
+    bool run_dma_write_test(
+        const char *name,
+        const std::vector<int8_t> &data,
+        uint32_t loc_mmio_addr,
+        uint32_t ext_addr)
+    {
+        int count = static_cast<int>(data.size());
+
+        // Load data into local buffer via MMIO
+        load_bytes(loc_mmio_addr, data);
+
+        // DMA write (local -> ext)
+        if (!dma_transfer(ext_addr, loc_mmio_addr, static_cast<uint32_t>(count), 1))
+        {
+            printf("  [FAIL] %s: DMA write TIMEOUT\n", name);
+            return false;
+        }
+
+        // Clear IRQ
+        mmio_write(REG_IRQ_CLEAR, 1);
+
+        // Read back from ext memory model and compare
+        auto got = ext_read_bytes(ext_addr, count);
+        bool pass = true;
+        for (int i = 0; i < count; ++i)
+        {
+            if (got[i] != data[i])
+            {
+                printf("  [FAIL] %s: byte[%d] expected %d, got %d\n",
+                       name, i, data[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d bytes verified)\n", name, count);
         return pass;
     }
 };

@@ -11,6 +11,7 @@
 //   8. Vec tests
 //   9. LayerNorm tests
 //  10. Pooling tests
+//  11. DMA tests
 
 #include "npu_tb.h"
 
@@ -1665,6 +1666,276 @@ static void run_vec_tests(TestResult &r)
     }
 }
 
+// Section 11: DMA tests
+static void run_dma_tests(TestResult &r)
+{
+    printf("\n--- DMA Tests ---\n\n");
+
+    // 11a: DMA read 4 bytes into weight buffer
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> data = {10, 20, 30, 40};
+        r.record(tb.run_dma_read_test("dma read 4B -> wt",
+                                      data, 0x1000, WEIGHT_BUF_BASE));
+    }
+
+    // 11b: DMA read 8 bytes into activation buffer
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> data = {1, 2, 3, 4, 5, 6, 7, 8};
+        r.record(tb.run_dma_read_test("dma read 8B -> act",
+                                      data, 0x2000, ACT_BUF_BASE));
+    }
+
+    // 11c: DMA write 4 bytes from weight buffer to external
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> data = {-1, -2, -3, -4};
+        r.record(tb.run_dma_write_test("dma write 4B wt -> ext",
+                                       data, WEIGHT_BUF_BASE, 0x5000));
+    }
+
+    // 11d: DMA write 8 bytes from activation buffer to external
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> data = {11, 22, 33, 44, 55, 66, 77, 88};
+        r.record(tb.run_dma_write_test("dma write 8B act -> ext",
+                                       data, ACT_BUF_BASE, 0x6000));
+    }
+
+    // 11e: DMA read with negative values
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> data = {-128, -64, 0, 64, 127};
+        r.record(tb.run_dma_read_test("dma read signed",
+                                      data, 0x3000, ACT_BUF_BASE));
+    }
+
+    // 11f: DMA read then compute (DMA loads weights, MMIO loads activations)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // DMA weights into weight buffer
+        std::vector<int8_t> wt = const_fill(9, 1);  // 3x3 all-one filter
+        tb.ext_load_bytes(0x8000, wt);
+        bool dma_ok = tb.dma_transfer(0x8000, WEIGHT_BUF_BASE,
+                                      static_cast<uint32_t>(wt.size()), 0);
+        if (!dma_ok)
+        {
+            printf("  [FAIL] dma-then-conv: DMA TIMEOUT\n");
+            r.record(false);
+        }
+        else
+        {
+            tb.mmio_write(REG_IRQ_CLEAR, 1);
+
+            // Also place zeros for bias after weights
+            uint32_t bias_addr = static_cast<uint32_t>(wt.size());
+            tb.mmio_write(WEIGHT_BUF_BASE + bias_addr, 0);
+
+            // MMIO-load activations
+            auto act = seq_fill(4 * 4, 1);
+            tb.load_bytes(ACT_BUF_BASE, act);
+
+            // Run conv
+            ConvDesc desc{};
+            desc.opcode       = 1;
+            desc.act_in_addr  = 0;
+            desc.act_out_addr = 2048;
+            desc.weight_addr  = 0;
+            desc.bias_addr    = bias_addr;
+            desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
+            desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
+            desc.stride_h = 1; desc.stride_w = 1;
+            desc.pad_h = 0; desc.pad_w = 0;
+            desc.quant_shift = 0;
+            desc.act_mode = ACT_MODE_RELU;
+            tb.submit_conv(desc);
+
+            if (!tb.wait_idle())
+            {
+                printf("  [FAIL] dma-then-conv: conv TIMEOUT\n");
+                r.record(false);
+            }
+            else
+            {
+                auto expected = ref_conv(act, wt, {}, 4, 4, 1, 1, 3, 3,
+                                         1, 1, 0, 0, 0, ACT_MODE_RELU);
+                auto got = tb.read_bytes(ACT_BUF_BASE + 2048,
+                                         static_cast<int>(expected.size()));
+                bool pass = true;
+                for (int i = 0; i < static_cast<int>(expected.size()); ++i)
+                {
+                    if (got[i] != expected[i])
+                    {
+                        printf("  [FAIL] dma-then-conv: out[%d] exp %d got %d\n",
+                               i, expected[i], got[i]);
+                        pass = false;
+                    }
+                }
+                if (pass)
+                    printf("  [PASS] dma-then-conv (%d outputs)\n",
+                           static_cast<int>(expected.size()));
+                r.record(pass);
+            }
+        }
+    }
+
+    // 11g: DMA write results out (compute, then DMA output to ext memory)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // Run a simple conv first
+        auto act = seq_fill(4 * 4, 1);
+        auto wt  = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("dma-write-result (conv)",
+                                        act, wt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        if (!conv_ok)
+        {
+            r.record(false);
+        }
+        else
+        {
+            // DMA the output (2x2 = 4 bytes at act_out_addr=2048) to ext
+            bool dma_ok = tb.dma_transfer(0xA000, ACT_BUF_BASE + 2048, 4, 1);
+            if (!dma_ok)
+            {
+                printf("  [FAIL] dma-write-result: DMA TIMEOUT\n");
+                r.record(false);
+            }
+            else
+            {
+                auto expected = ref_conv(act, wt, {}, 4, 4, 1, 1, 3, 3,
+                                         1, 1, 0, 0, 0, ACT_MODE_RELU);
+                auto got = tb.ext_read_bytes(0xA000,
+                                             static_cast<int>(expected.size()));
+                bool pass = true;
+                for (int i = 0; i < static_cast<int>(expected.size()); ++i)
+                {
+                    if (got[i] != expected[i])
+                    {
+                        printf("  [FAIL] dma-write-result: ext[%d] exp %d got %d\n",
+                               i, expected[i], got[i]);
+                        pass = false;
+                    }
+                }
+                if (pass)
+                    printf("  [PASS] dma-write-result (%d bytes)\n",
+                           static_cast<int>(expected.size()));
+                r.record(pass);
+            }
+        }
+    }
+
+    // 11h: DMA status register reflects busy
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // After reset, DMA should not be busy
+        uint32_t status = tb.mmio_read(REG_DMA_STATUS);
+        bool pass = (status & 1) == 0;
+        if (!pass)
+            printf("  [FAIL] dma status idle: got 0x%x\n", status);
+        else
+            printf("  [PASS] dma status idle\n");
+        r.record(pass);
+    }
+
+    // 11i: DMA register read-back
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        tb.mmio_write(REG_DMA_EXT_ADDR, 0xDEAD0000);
+        tb.mmio_write(REG_DMA_LOC_ADDR, WEIGHT_BUF_BASE);
+        tb.mmio_write(REG_DMA_LEN, 42);
+
+        uint32_t ext = tb.mmio_read(REG_DMA_EXT_ADDR);
+        uint32_t loc = tb.mmio_read(REG_DMA_LOC_ADDR);
+        uint32_t len = tb.mmio_read(REG_DMA_LEN);
+
+        bool pass = (ext == 0xDEAD0000) &&
+                    (loc == WEIGHT_BUF_BASE) &&
+                    (len == 42);
+        if (!pass)
+            printf("  [FAIL] dma reg readback: ext=0x%x loc=0x%x len=%u\n",
+                   ext, loc, len);
+        else
+            printf("  [PASS] dma reg readback\n");
+        r.record(pass);
+    }
+
+    // 11j: Random DMA round-trip (ext -> local -> ext)
+    {
+        std::mt19937 rng(500);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        std::uniform_int_distribution<int> dist(-128, 127);
+        std::vector<int8_t> data(32);
+        for (auto &x : data) x = static_cast<int8_t>(dist(rng));
+
+        // DMA read into act buffer
+        bool rd_ok = tb.run_dma_read_test("dma round-trip (read)",
+                                          data, 0xC000, ACT_BUF_BASE);
+
+        // DMA write back out to different ext address
+        if (rd_ok)
+        {
+            bool wr_ok = tb.dma_transfer(0xD000, ACT_BUF_BASE,
+                                         static_cast<uint32_t>(data.size()), 1);
+            if (!wr_ok)
+            {
+                printf("  [FAIL] dma round-trip (write): TIMEOUT\n");
+                r.record(false);
+            }
+            else
+            {
+                auto got = tb.ext_read_bytes(0xD000,
+                                             static_cast<int>(data.size()));
+                bool pass = true;
+                for (int i = 0; i < static_cast<int>(data.size()); ++i)
+                {
+                    if (got[i] != data[i])
+                    {
+                        printf("  [FAIL] dma round-trip: byte[%d] exp %d got %d\n",
+                               i, data[i], got[i]);
+                        pass = false;
+                    }
+                }
+                if (pass)
+                    printf("  [PASS] dma round-trip (%d bytes)\n",
+                           static_cast<int>(data.size()));
+                r.record(pass);
+            }
+        }
+        else
+        {
+            r.record(false);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
@@ -1686,6 +1957,7 @@ int main(int argc, char **argv)
     run_vec_tests(r);
     run_lnorm_tests(r);
     run_pool_tests(r);
+    run_dma_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

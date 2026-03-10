@@ -15,6 +15,7 @@ package npu_types_pkg;
     localparam int ADDR_W      = 16;  // Local SRAM address space (64 KB)
     localparam int MMIO_ADDR_W = 20;  // MMIO address width (1 MB)
     localparam int MMIO_DATA_W = 32;  // MMIO data bus width
+    localparam int EXT_ADDR_W  = 32;  // External memory address width
 
     // Dimension type (spatial H, W, C, K, R, S, stride, pad)
     localparam int DIM_W = 16;

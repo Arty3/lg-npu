@@ -21,6 +21,15 @@ module npu_shell
     output logic                   mmio_ready,
     output logic [MMIO_DATA_W-1:0] mmio_rdata,
 
+    // External memory port (DMA)
+    output logic [EXT_ADDR_W-1:0]  ext_mem_addr,
+    output logic [MMIO_DATA_W-1:0] ext_mem_wdata,
+    output logic                   ext_mem_wr,
+    output logic                   ext_mem_req,
+    input  logic                   ext_mem_gnt,
+    input  logic [MMIO_DATA_W-1:0] ext_mem_rdata,
+    input  logic                   ext_mem_rvalid,
+
     // Interrupt output
     output logic                   irq
 );
@@ -56,12 +65,24 @@ module npu_shell
     logic [MMIO_DATA_W-1:0] buf_rdata;
     logic                   buf_rvalid;
 
+    // Register block -> buffer window (host MMIO path, before DMA mux)
+    logic [MMIO_ADDR_W-1:0] reg_buf_addr;
+    logic [MMIO_DATA_W-1:0] reg_buf_wdata;
+    logic                   reg_buf_wr, reg_buf_req;
+
     logic [MMIO_ADDR_W-1:0] fetch_addr;
     logic                   fetch_req;
     logic [MMIO_DATA_W-1:0] fetch_rdata;
     logic                   fetch_rvalid;
 
     logic [PERF_CNT_W-1:0]  perf_cycles, perf_active, perf_stall;
+
+    // DMA configuration wires
+    logic [EXT_ADDR_W-1:0]  dma_ext_addr_w;
+    logic [MMIO_ADDR_W-1:0] dma_loc_addr_w;
+    logic [15:0]            dma_len_w;
+    logic                   dma_start_w, dma_dir_w;
+    logic                   dma_busy_w, dma_done_w;
 
     npu_reg_block u_regs (
         .clk          (clk),
@@ -85,18 +106,61 @@ module npu_shell
         .core_idle    (core_idle),
         .core_busy    (core_busy),
         .queue_full   (queue_full_w),
-        .buf_addr     (buf_addr),
-        .buf_wdata    (buf_wdata),
-        .buf_wr       (buf_wr),
-        .buf_req      (buf_req),
+        .buf_addr     (reg_buf_addr),
+        .buf_wdata    (reg_buf_wdata),
+        .buf_wr       (reg_buf_wr),
+        .buf_req      (reg_buf_req),
         .buf_gnt      (buf_gnt),
         .buf_rdata    (buf_rdata),
         .buf_rvalid   (buf_rvalid),
         .fetch_addr   (fetch_addr),
         .fetch_req    (fetch_req),
         .fetch_rdata  (fetch_rdata),
-        .fetch_rvalid (fetch_rvalid)
+        .fetch_rvalid (fetch_rvalid),
+        .dma_ext_addr (dma_ext_addr_w),
+        .dma_loc_addr (dma_loc_addr_w),
+        .dma_len      (dma_len_w),
+        .dma_start    (dma_start_w),
+        .dma_dir      (dma_dir_w),
+        .dma_busy     (dma_busy_w)
     );
+
+    // DMA frontend
+    logic [MMIO_ADDR_W-1:0] dma_buf_addr;
+    logic [MMIO_DATA_W-1:0] dma_buf_wdata;
+    logic                   dma_buf_wr, dma_buf_req;
+
+    npu_dma_frontend u_dma (
+        .clk            (clk),
+        .rst_n          (rst_n),
+        .dma_ext_addr   (dma_ext_addr_w),
+        .dma_loc_addr   (dma_loc_addr_w),
+        .dma_len        (dma_len_w),
+        .dma_start      (dma_start_w),
+        .dma_dir        (dma_dir_w),
+        .dma_busy       (dma_busy_w),
+        .dma_done       (dma_done_w),
+        .ext_mem_addr   (ext_mem_addr),
+        .ext_mem_wdata  (ext_mem_wdata),
+        .ext_mem_wr     (ext_mem_wr),
+        .ext_mem_req    (ext_mem_req),
+        .ext_mem_gnt    (ext_mem_gnt),
+        .ext_mem_rdata  (ext_mem_rdata),
+        .ext_mem_rvalid (ext_mem_rvalid),
+        .buf_addr       (dma_buf_addr),
+        .buf_wdata      (dma_buf_wdata),
+        .buf_wr         (dma_buf_wr),
+        .buf_req        (dma_buf_req),
+        .buf_gnt        (buf_gnt),
+        .buf_rdata      (buf_rdata),
+        .buf_rvalid     (buf_rvalid)
+    );
+
+    // Mux buffer port: DMA takes over when busy, otherwise host MMIO
+    assign buf_addr  = dma_busy_w ? dma_buf_addr  : reg_buf_addr;
+    assign buf_wdata = dma_busy_w ? dma_buf_wdata : reg_buf_wdata;
+    assign buf_wr    = dma_busy_w ? dma_buf_wr    : reg_buf_wr;
+    assign buf_req   = dma_busy_w ? dma_buf_req   : reg_buf_req;
 
     // Command fetch + decode + queue
     logic [MMIO_DATA_W-1:0]  desc_word;
@@ -178,7 +242,7 @@ module npu_shell
 
     // Status aggregation
     npu_status u_status (
-        .backend_busy  (be_busy),
+        .backend_busy  (be_busy | dma_busy_w),
         .queue_empty   (queue_empty),
         .queue_full    (queue_full),
         .cmd_pipe_busy (fetch_busy | decode_busy),
@@ -187,11 +251,11 @@ module npu_shell
         .q_full        (queue_full_w)
     );
 
-    // IRQ controller
+    // IRQ controller (DMA done OR'd with cmd_done)
     npu_irq_ctrl u_irq (
         .clk        (clk),
         .rst_n      (rst_n),
-        .cmd_done   (cmd_done_pulse),
+        .cmd_done   (cmd_done_pulse | dma_done_w),
         .err        (decode_err),
         .irq_enable (irq_enable_w),
         .irq_clear  (irq_clear_w),

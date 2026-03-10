@@ -12,7 +12,7 @@ as possible:
 | Compute | 2D convolution, general matrix multiply (GEMM), softmax, element-wise vector operations (ADD, MUL), layer normalisation, and 2D spatial pooling (MAX, AVG). |
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
 | Command interface | Six opcodes (`CONV`, `GEMM`, `SOFTMAX`, `VEC`, `LNORM`, `POOL`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, softmax, vector operation, layer normalisation, or pooling window. |
-| Memory | Local on-chip SRAM only (weight buffer, activation buffer, partial-sum buffer). No external DRAM path; no DMA transfers. Software pre-loads buffers before issuing the command. |
+| Memory | Local on-chip SRAM (weight buffer, activation buffer, partial-sum buffer) with a register-driven DMA engine for bulk transfers between external memory and local buffers. Software may also pre-load buffers over MMIO. |
 | Platform | Simulation-only. No FPGA or ASIC bring-up. |
 
 These constraints mean the first passing test is: software writes INT8 weights
@@ -71,11 +71,16 @@ graph TD
         conv --> completion
         mem_top --> completion
 
+        dma["npu_dma_frontend"]
         irq["npu_irq_ctrl"]
         completion --> irq
+        dma --> irq
     end
 
     rb -- "buffer windows" --> mem_top
+    rb -- "DMA config" --> dma
+    dma <--> mem_top
+    dma -- "ext_mem" --> ExtMem["External Memory"]
 ```
 
 ---
@@ -136,9 +141,13 @@ with explicit signal-level ports.
 | `npu_local_mem_wrap` | Technology wrapper around the physical SRAM macro (maps to simulation model, FPGA BRAM, or ASIC SRAM). |
 | `npu_buffer_router` | Routes read/write requests between the host MMIO path, the conv datapath, and the buffer banks. |
 
-DMA modules (`npu_dma_reader`, `npu_dma_writer`, `npu_dma_frontend`) exist in
-the source tree but are **not used** in the current scope. Data enters and
-leaves the buffers exclusively over the host MMIO path.
+| `npu_dma_frontend` | DMA orchestrator. Instantiates reader and writer engines, muxes their external-memory and buffer ports, and reports busy/done status. |
+| `npu_dma_reader` | DMA read engine (external memory -> local SRAM). Byte-by-byte FSM: issues external read, waits for response, writes to local buffer. |
+| `npu_dma_writer` | DMA write engine (local SRAM -> external memory). Byte-by-byte FSM: reads from local buffer, waits for response, issues external write. |
+
+When a DMA transfer is active, the DMA frontend takes over the buffer port
+(displacing the host MMIO path) and drives external-memory request signals.
+DMA and compute are mutually exclusive; DMA busy feeds into `npu_status`.
 
 ### Convolution Backend (`rtl/backends/conv/`)
 
@@ -267,7 +276,8 @@ No floating-point hardware exists anywhere in the design.
 ## Execution Flow
 
 1. **Load** — Host writes INT8 weight and activation data into the local SRAM
-   buffers through the MMIO buffer windows in `npu_reg_block`.
+   buffers through the MMIO buffer windows in `npu_reg_block`, or uses the
+   DMA engine to bulk-transfer data from external memory.
 2. **Submit** — Host writes a `CONV` or `GEMM` command descriptor into the
    command queue and rings the doorbell register.
 3. **Fetch & Decode** — `npu_cmd_fetch` reads the descriptor;
@@ -281,7 +291,7 @@ No floating-point hardware exists anywhere in the design.
 6. **Complete** — `npu_completion` records the done event and triggers
    `npu_irq_ctrl`.
 7. **Read-back** — Host reads the INT8 output from the activation buffer
-   through the MMIO window.
+   through the MMIO window, or uses DMA to write results to external memory.
 
 ---
 
@@ -290,7 +300,6 @@ No floating-point hardware exists anywhere in the design.
 - Additional data types (FP16, BF16, INT4, INT16).
 - Operations beyond 2D convolution and GEMM (pooling, depthwise conv, transpose conv).
 - Multiple tensor layouts or layout conversion.
-- External memory (DRAM) and the DMA subsystem.
 - Multi-command pipelining or out-of-order execution.
 - FPGA or ASIC bring-up and platform integration.
 - Software runtime beyond bare-metal register writes.

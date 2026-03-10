@@ -7,20 +7,25 @@ Source of truth: `rtl/memory/npu_buffer_router.sv`,
 
 ## Overview
 
-The v0.1 NPU uses **local SRAM only** — there is no DMA engine, no
-external DRAM, and no cache hierarchy. The host loads all tensor data
-through MMIO buffer windows and reads results back the same way.
+The NPU uses **local SRAM** for all compute data. The host can load tensor
+data through MMIO buffer windows or use the **DMA engine** to bulk-transfer
+data between external memory and local buffers.
 
 ```mermaid
 flowchart TB
     Host["Host (MMIO)"]
+    DMA["npu_dma_frontend"]
+    ExtMem["External Memory"]
     Router["npu_buffer_router"]
     WB["Weight Buffer\n4 KiB INT8"]
     AB["Activation Buffer\n8 KiB INT8"]
     PB["Psum Buffer\n16 KiB INT32"]
-    BE["Conv Backend"]
+    BE["Compute Backends"]
 
     Host --> Router
+    DMA --> Router
+    DMA <--> ExtMem
+    Host -- "DMA regs" --> DMA
     Router --> WB
     Router --> AB
     Router --> PB
@@ -96,3 +101,66 @@ Address decode:
 | `addr ∈ [0x1_0000, 0x2_0000)` | Weight |
 | `addr ∈ [0x2_0000, 0x3_0000)` | Activation |
 | `addr ≥ 0x3_0000` | Psum |
+
+---
+
+## DMA Engine
+
+The DMA engine (`npu_dma_frontend`) enables bulk transfers between an
+external memory port and the local SRAM buffers. It is register-driven
+(not command-driven) and operates independently of the command pipeline.
+
+### Architecture
+
+```mermaid
+flowchart LR
+    Regs["DMA Registers"] --> FE["npu_dma_frontend"]
+    FE --> Reader["npu_dma_reader"]
+    FE --> Writer["npu_dma_writer"]
+    Reader <--> ExtPort["External Memory Port"]
+    Writer <--> ExtPort
+    Reader --> BufMux["Buffer Port Mux"]
+    Writer --> BufMux
+    BufMux --> Router["npu_buffer_router"]
+```
+
+### Registers
+
+| Offset | Name | R/W | Description |
+|--------|------|-----|-------------|
+| `0x0030` | `DMA_EXT_ADDR` | RW | External memory base address (32-bit) |
+| `0x0034` | `DMA_LOC_ADDR` | RW | Local buffer base address (20-bit MMIO space) |
+| `0x0038` | `DMA_LEN` | RW | Transfer length in bytes |
+| `0x003C` | `DMA_CTRL` | WO | bit 0: start (self-clearing pulse), bit 1: direction (0 = read ext->local, 1 = write local->ext) |
+| `0x0040` | `DMA_STATUS` | RO | bit 0: busy |
+
+### Transfer Protocol
+
+- **Read** (ext -> local): The reader FSM issues an external memory read
+  request, waits for `rvalid`, then writes the received data to the local
+  buffer at the configured address. This repeats byte-by-byte for `LEN`
+  bytes.
+- **Write** (local -> ext): The writer FSM reads from the local buffer,
+  waits for `rvalid`, then issues an external memory write. Repeats for
+  `LEN` bytes.
+
+### External Memory Port
+
+The shell exposes a simple req/gnt/rvalid memory interface:
+
+| Signal | Dir | Width | Description |
+|--------|-----|-------|-------------|
+| `ext_mem_addr` | out | 32 | Address |
+| `ext_mem_wdata` | out | 32 | Write data |
+| `ext_mem_wr` | out | 1 | Write enable (0 = read) |
+| `ext_mem_req` | out | 1 | Request valid |
+| `ext_mem_gnt` | in | 1 | Grant (request accepted) |
+| `ext_mem_rdata` | in | 32 | Read data |
+| `ext_mem_rvalid` | in | 1 | Read data valid |
+
+### Concurrency
+
+DMA and compute are mutually exclusive. When DMA is busy:
+- The DMA frontend takes over the buffer port (host MMIO path is blocked).
+- `npu_status` reports the core as busy.
+- DMA done generates an IRQ (OR'd with command completion).

@@ -56,7 +56,15 @@ module npu_reg_block
     input  logic [MMIO_ADDR_W-1:0]  fetch_addr,
     input  logic                    fetch_req,
     output logic [MMIO_DATA_W-1:0]  fetch_rdata,
-    output logic                    fetch_rvalid
+    output logic                    fetch_rvalid,
+
+    // DMA configuration outputs
+    output logic [EXT_ADDR_W-1:0]   dma_ext_addr,
+    output logic [MMIO_ADDR_W-1:0]  dma_loc_addr,
+    output logic [15:0]             dma_len,
+    output logic                    dma_start,
+    output logic                    dma_dir,
+    input  logic                    dma_busy
 );
 
     // Address decode
@@ -79,22 +87,48 @@ module npu_reg_block
     assign doorbell  = doorbell_r;
     assign irq_clear = irq_clear_r;
 
+    // DMA registers
+    logic [EXT_ADDR_W-1:0]  dma_ext_addr_r;
+    logic [MMIO_ADDR_W-1:0] dma_loc_addr_r;
+    logic [15:0]            dma_len_r;
+    logic                   dma_start_r;
+    logic                   dma_dir_r;
+
+    assign dma_ext_addr = dma_ext_addr_r;
+    assign dma_loc_addr = dma_loc_addr_r;
+    assign dma_len      = dma_len_r;
+    assign dma_start    = dma_start_r;
+    assign dma_dir      = dma_dir_r;
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            ctrl_reg    <= '0;
-            irq_en_reg  <= '0;
-            doorbell_r  <= 1'b0;
-            irq_clear_r <= 1'b0;
+            ctrl_reg       <= '0;
+            irq_en_reg     <= '0;
+            doorbell_r     <= 1'b0;
+            irq_clear_r    <= 1'b0;
+            dma_ext_addr_r <= '0;
+            dma_loc_addr_r <= '0;
+            dma_len_r      <= '0;
+            dma_start_r    <= 1'b0;
+            dma_dir_r      <= 1'b0;
         end else begin
             doorbell_r  <= 1'b0;
             irq_clear_r <= 1'b0;
+            dma_start_r <= 1'b0;
 
             if (mmio_valid && mmio_wr && is_reg) begin
                 case (mmio_addr)
-                    REG_CTRL:       ctrl_reg    <= mmio_wdata;
-                    REG_DOORBELL:   doorbell_r  <= 1'b1;
-                    REG_IRQ_ENABLE: irq_en_reg  <= mmio_wdata;
-                    REG_IRQ_CLEAR:  irq_clear_r <= 1'b1;
+                    REG_CTRL:         ctrl_reg       <= mmio_wdata;
+                    REG_DOORBELL:     doorbell_r     <= 1'b1;
+                    REG_IRQ_ENABLE:   irq_en_reg     <= mmio_wdata;
+                    REG_IRQ_CLEAR:    irq_clear_r    <= 1'b1;
+                    REG_DMA_EXT_ADDR: dma_ext_addr_r <= mmio_wdata;
+                    REG_DMA_LOC_ADDR: dma_loc_addr_r <= mmio_wdata[MMIO_ADDR_W-1:0];
+                    REG_DMA_LEN:      dma_len_r      <= mmio_wdata[15:0];
+                    REG_DMA_CTRL: begin
+                        dma_start_r <= mmio_wdata[DMA_CTRL_START_BIT];
+                        dma_dir_r   <= mmio_wdata[DMA_CTRL_DIR_BIT];
+                    end
                     default: ;
                 endcase
             end
@@ -150,6 +184,11 @@ module npu_reg_block
             REG_PERF_CYCLES: reg_rdata = perf_cycles;
             REG_PERF_ACTIVE: reg_rdata = perf_active;
             REG_PERF_STALL:  reg_rdata = perf_stall;
+            REG_DMA_EXT_ADDR: reg_rdata = dma_ext_addr_r;
+            REG_DMA_LOC_ADDR: reg_rdata = {{(MMIO_DATA_W-MMIO_ADDR_W){1'b0}}, dma_loc_addr_r};
+            REG_DMA_LEN:      reg_rdata = {{(MMIO_DATA_W-16){1'b0}}, dma_len_r};
+            REG_DMA_CTRL:     reg_rdata = '0;
+            REG_DMA_STATUS:   reg_rdata = {31'b0, dma_busy};
             default:         reg_rdata = '0;
         endcase
     end

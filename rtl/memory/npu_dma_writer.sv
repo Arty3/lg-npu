@@ -1,14 +1,152 @@
-// ============================================================================
-// npu_dma_writer.sv - DMA write engine (stub - not used in current scope)
-// ============================================================================
+// npu_dma_writer.sv - DMA write engine (local SRAM -> external memory)
 
 module npu_dma_writer
     import npu_types_pkg::*;
 (
-    input  logic clk,
-    input  logic rst_n
+    input  logic                    clk,
+    input  logic                    rst_n,
+
+    // Control
+    input  logic                    start,
+    input  logic [EXT_ADDR_W-1:0]   ext_addr,
+    input  logic [MMIO_ADDR_W-1:0]  loc_addr,
+    input  logic [15:0]             len,
+    output logic                    busy,
+    output logic                    done,
+
+    // External memory write port
+    output logic [EXT_ADDR_W-1:0]   ext_mem_addr,
+    output logic [MMIO_DATA_W-1:0]  ext_mem_wdata,
+    output logic                    ext_mem_wr,
+    output logic                    ext_mem_req,
+    input  logic                    ext_mem_gnt,
+
+    // Local buffer read port
+    output logic [MMIO_ADDR_W-1:0]  buf_addr,
+    output logic                    buf_req,
+    input  logic                    buf_gnt,
+    input  logic [MMIO_DATA_W-1:0]  buf_rdata,
+    input  logic                    buf_rvalid
 );
 
-    // Intentionally empty - placeholder for future external DRAM writes.
+    typedef enum logic [2:0]
+    {
+        S_IDLE,
+        S_LOC_RD,
+        S_LOC_WAIT,
+        S_EXT_WR,
+        S_DONE
+    }   state_e;
+
+    state_e                 state_r, state_next;
+    logic [EXT_ADDR_W-1:0]  ext_addr_r;
+    logic [MMIO_ADDR_W-1:0] loc_addr_r;
+    logic [15:0]            len_r;
+    logic [15:0]            cnt_r;
+    logic [MMIO_DATA_W-1:0] data_r;
+
+    always_ff @(posedge clk or negedge rst_n)
+    begin
+        if (!rst_n)
+        begin
+            state_r    <= S_IDLE;
+            ext_addr_r <= '0;
+            loc_addr_r <= '0;
+            len_r      <= '0;
+            cnt_r      <= '0;
+            data_r     <= '0;
+        end
+        else
+        begin
+            state_r <= state_next;
+            case (state_r)
+                S_IDLE:
+                begin
+                    if (start)
+                    begin
+                        ext_addr_r <= ext_addr;
+                        loc_addr_r <= loc_addr;
+                        len_r      <= len;
+                        cnt_r      <= '0;
+                    end
+                end
+                S_LOC_RD:
+                begin
+                    // Wait for grant
+                end
+                S_LOC_WAIT:
+                begin
+                    if (buf_rvalid)
+                        data_r <= buf_rdata;
+                end
+                S_EXT_WR:
+                begin
+                    if (ext_mem_gnt)
+                    begin
+                        cnt_r      <= cnt_r + 16'd1;
+                        ext_addr_r <= ext_addr_r + 32'd1;
+                        loc_addr_r <= loc_addr_r + 20'd1;
+                    end
+                end
+                default: ;
+            endcase
+        end
+    end
+
+    always_comb
+    begin
+        state_next    = state_r;
+        ext_mem_addr  = '0;
+        ext_mem_wdata = '0;
+        ext_mem_wr    = 1'b0;
+        ext_mem_req   = 1'b0;
+        buf_addr      = '0;
+        buf_req       = 1'b0;
+        busy          = 1'b0;
+        done          = 1'b0;
+
+        case (state_r)
+            S_IDLE:
+            begin
+                if (start)
+                    state_next = S_LOC_RD;
+            end
+            S_LOC_RD:
+            begin
+                busy     = 1'b1;
+                buf_addr = loc_addr_r;
+                buf_req  = 1'b1;
+                if (buf_gnt)
+                    state_next = S_LOC_WAIT;
+            end
+            S_LOC_WAIT:
+            begin
+                busy = 1'b1;
+                if (buf_rvalid)
+                    state_next = S_EXT_WR;
+            end
+            S_EXT_WR:
+            begin
+                busy          = 1'b1;
+                ext_mem_addr  = ext_addr_r;
+                ext_mem_wdata = data_r;
+                ext_mem_wr    = 1'b1;
+                ext_mem_req   = 1'b1;
+                if (ext_mem_gnt)
+                begin
+                    if (cnt_r + 16'd1 >= len_r)
+                        state_next = S_DONE;
+                    else
+                        state_next = S_LOC_RD;
+                end
+            end
+            S_DONE:
+            begin
+                done       = 1'b1;
+                state_next = S_IDLE;
+            end
+            default: state_next = S_IDLE;
+        endcase
+    end
 
 endmodule : npu_dma_writer
