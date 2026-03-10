@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Use sv2v + Yosys to generate per-component block diagrams.
+"""Use sv2v + Yosys + netlistsvg to generate per-component block diagrams.
 
-Produces two SVG variants per component:
-  - *_yosys.svg  via Yosys `show` (Graphviz)
-  - *_netlistsvg.svg  via netlistsvg (digital-logic style)
+Produces one SVG per component via netlistsvg (digital-logic style).
 
-Requires: sv2v, yosys, graphviz (dot).
-Optional: netlistsvg (npm install -g netlistsvg).
+Requires: sv2v, yosys, netlistsvg (npm install -g netlistsvg).
 """
 
 import argparse
@@ -18,7 +15,6 @@ import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RTL_F = REPO_ROOT / "tools" / "lint" / "rtl.f"
-HAS_NETLISTSVG = shutil.which("netlistsvg") is not None
 
 # Map of logical name -> top module
 COMPONENTS = {
@@ -82,15 +78,13 @@ def sv2v_convert(files: list[str]) -> str:
 
 
 def run_yosys(top: str, prefix: pathlib.Path, tmp_path: str) -> bool:
-    yosys_prefix = pathlib.Path(f"{prefix}_yosys")
     json_path = pathlib.Path(f"{prefix}.json")
-    nsvg_path = pathlib.Path(f"{prefix}_netlistsvg.svg")
+    svg_path = pathlib.Path(f"{prefix}.svg")
 
     yosys_cmds = (
         f"read_verilog {tmp_path}; "
         f"hierarchy -top {top}; "
         f"proc; opt_clean; "
-        f"show -notitle -colors 1 -width -format svg -prefix {yosys_prefix} {top}; "
         f"write_json {json_path}"
     )
     result = subprocess.run(
@@ -99,30 +93,34 @@ def run_yosys(top: str, prefix: pathlib.Path, tmp_path: str) -> bool:
         text=True,
     )
     if result.returncode != 0:
-        print(f"  FAILED: {top}", file=sys.stderr)
+        print(f"  FAILED (yosys): {top}", file=sys.stderr)
         print(result.stderr[-500:] if len(result.stderr) > 500 else result.stderr, file=sys.stderr)
         return False
 
-    # Netlistsvg rendering (optional)
-    if HAS_NETLISTSVG:
-        res = subprocess.run(
-            ["netlistsvg", str(json_path), "-o", str(nsvg_path)],
-            capture_output=True,
-            text=True,
-        )
-        if res.returncode != 0:
-            print(f"  netlistsvg failed for {top} (non-fatal)", file=sys.stderr)
+    res = subprocess.run(
+        ["netlistsvg", str(json_path), "-o", str(svg_path)],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        print(f"  FAILED (netlistsvg): {top}", file=sys.stderr)
+        return False
 
     return True
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate per-component SVG diagrams via Yosys")
+    parser = argparse.ArgumentParser(description="Generate per-component SVG diagrams via Yosys + netlistsvg")
     parser.add_argument("--out-dir", type=pathlib.Path,
                         default=REPO_ROOT / "docs" / "diagrams" / "components")
     parser.add_argument("--component", choices=list(COMPONENTS.keys()) + ["all"],
                         default="all", help="Which component to generate (default: all)")
     args = parser.parse_args()
+
+    if not shutil.which("netlistsvg"):
+        print("ERROR: netlistsvg not found (install: npm install -g netlistsvg)", file=sys.stderr)
+        sys.exit(1)
+
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     files = collect_files()
@@ -141,7 +139,7 @@ def main() -> None:
         prefix = args.out_dir / name
         print(f"Generating {name} ({top}) ...")
         if run_yosys(top, prefix, tmp_path):
-            print(f"  -> {prefix}_yosys.svg" + (f", {prefix}_netlistsvg.svg" if HAS_NETLISTSVG else ""))
+            print(f"  -> {prefix}.svg")
             ok += 1
         else:
             fail += 1

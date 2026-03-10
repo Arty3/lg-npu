@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Generate all architecture diagrams into docs/diagrams/ using
-# sv2v (SV->Verilog) + Yosys (elaboration) + Graphviz (rendering).
+# sv2v (SV->Verilog) + Yosys (elaboration) + netlistsvg (rendering).
 #
-# Prerequisites: sv2v, yosys, graphviz (dot)
+# Prerequisites: sv2v, yosys, netlistsvg (npm install -g netlistsvg)
 # ============================================================================
 set -euo pipefail
 
@@ -13,7 +13,7 @@ VIZ_DIR="${REPO_ROOT}/tools/visualize"
 
 mkdir -p "${OUT_DIR}/components"
 
-echo "=== Generating RTL visualisations via sv2v + Yosys ==="
+echo "=== Generating RTL visualisations via sv2v + Yosys + netlistsvg ==="
 echo ""
 
 echo "--- Top-level view (npu_shell, 1 level deep) ---"

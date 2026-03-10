@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Use sv2v + Yosys to generate a top-level block diagram of npu_shell.
+"""Use sv2v + Yosys + netlistsvg to generate a top-level block diagram of npu_shell.
 
-Produces two SVG variants:
-  - *_yosys.svg  via Yosys `show` (Graphviz)
-  - *_netlistsvg.svg  via netlistsvg (digital-logic style)
+Produces a single SVG via netlistsvg (digital-logic style), showing only
+the first level of hierarchy (sub-module boxes and their inter-connections)
+without descending into child module internals.
 
-Shows only the first level of hierarchy (sub-module boxes and their
-inter-connections), without descending into child module internals.
-
-Requires: sv2v, yosys, graphviz (dot).
-Optional: netlistsvg (npm install -g netlistsvg).
+Requires: sv2v, yosys, netlistsvg (npm install -g netlistsvg).
 """
 
 import argparse
@@ -21,7 +17,6 @@ import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RTL_F = REPO_ROOT / "tools" / "lint" / "rtl.f"
-HAS_NETLISTSVG = shutil.which("netlistsvg") is not None
 
 
 def collect_files() -> list[str]:
@@ -54,15 +49,18 @@ def sv2v_convert(files: list[str]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate top-level npu_shell diagram via Yosys")
+    parser = argparse.ArgumentParser(description="Generate top-level npu_shell diagram via Yosys + netlistsvg")
     parser.add_argument("--out-dir", type=pathlib.Path, default=REPO_ROOT / "docs" / "diagrams")
     parser.add_argument("--top", default="npu_shell")
     args = parser.parse_args()
 
+    if not shutil.which("netlistsvg"):
+        print("ERROR: netlistsvg not found (install: npm install -g netlistsvg)", file=sys.stderr)
+        sys.exit(1)
+
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    yosys_prefix = args.out_dir / "top_view_yosys"
     json_path = args.out_dir / "top_view.json"
-    nsvg_path = args.out_dir / "top_view_netlistsvg.svg"
+    svg_path = args.out_dir / "top_view.svg"
 
     files = collect_files()
     verilog = sv2v_convert(files)
@@ -71,16 +69,14 @@ def main() -> None:
         tmp.write(verilog)
         tmp_path = tmp.name
 
-    # Yosys: Graphviz SVG + JSON for netlistsvg
     yosys_cmds = (
         f"read_verilog {tmp_path}; "
         f"hierarchy -top {args.top}; "
         f"proc; opt_clean; "
-        f"show -notitle -colors 1 -width -format svg -prefix {yosys_prefix} {args.top}; "
         f"write_json {json_path}"
     )
 
-    print(f"Running Yosys to generate {yosys_prefix}.svg ...")
+    print(f"Running Yosys to elaborate {args.top} ...")
     result = subprocess.run(
         ["yosys", "-p", yosys_cmds],
         capture_output=True,
@@ -93,23 +89,18 @@ def main() -> None:
         print(result.stderr[-1000:] if len(result.stderr) > 1000 else result.stderr, file=sys.stderr)
         sys.exit(1)
 
-    print(f"Generated {yosys_prefix}.svg")
+    print(f"Running netlistsvg to generate {svg_path} ...")
+    result = subprocess.run(
+        ["netlistsvg", str(json_path), "-o", str(svg_path)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("netlistsvg failed:", file=sys.stderr)
+        print(result.stderr, file=sys.stderr)
+        sys.exit(1)
 
-    # Netlistsvg: cleaner digital-logic-style SVG
-    if HAS_NETLISTSVG:
-        print(f"Running netlistsvg to generate {nsvg_path} ...")
-        result = subprocess.run(
-            ["netlistsvg", str(json_path), "-o", str(nsvg_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            print("netlistsvg failed (non-fatal):", file=sys.stderr)
-            print(result.stderr, file=sys.stderr)
-        else:
-            print(f"Generated {nsvg_path}")
-    else:
-        print("netlistsvg not found, skipping (install: npm install -g netlistsvg)")
+    print(f"Generated {svg_path}")
 
 
 if __name__ == "__main__":
