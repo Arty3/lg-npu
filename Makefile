@@ -66,6 +66,10 @@ compile-control-tests: $(SIM_BUILD)
 compile-perf-tests: $(SIM_BUILD)
 	$(call build_test,perf_tests,tb/perf/npu_perf_tests.cpp)
 
+.PHONY: compile-full-tests
+compile-full-tests: $(SIM_BUILD)
+	$(call build_test,full_tests,tb/integration/npu_full_tests.cpp)
+
 .PHONY: sim-unit
 sim-unit: ## Run unit-level tests
 	bash sim/scripts/run_unit.sh
@@ -99,9 +103,14 @@ sim-control-tests: compile-control-tests $(SIM_OUT) $(WAVE_DIR) ## Run control/s
 sim-perf-tests: compile-perf-tests $(SIM_OUT) $(WAVE_DIR) ## Run performance counter test suite
 	$(SIM_BUILD)/perf_tests/V$(TOP)
 
+.PHONY: sim-full-tests
+sim-full-tests: compile-full-tests $(SIM_OUT) $(WAVE_DIR) ## Run full regression test suite
+	$(SIM_BUILD)/full_tests/V$(TOP)
+
 .PHONY: sim-full
-sim-full: ## Run full regression
-	bash sim/scripts/run_all.sh sim/regressions/full.list
+sim-full: sim-smoke sim-full-tests ## Run complete regression (smoke + full)
+	@echo ""
+	@echo "=== sim-full: ALL SUITES PASSED ==="
 
 .PHONY: vectors
 vectors: ## Generate test vectors from Python reference models
