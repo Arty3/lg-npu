@@ -334,11 +334,15 @@ static bool test_output_writes_only_when_valid(TestResult &r)
     int out_count = static_cast<int>(expected.size()); // 4
 
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
+    // Zero-fill bias region after weights so hardware bias read returns 0
+    uint32_t bias_off = static_cast<uint32_t>(wt.size());
+    tb.mmio_write(WEIGHT_BUF_BASE + bias_off, 0);
     tb.load_bytes(ACT_BUF_BASE, act);
 
     ConvDesc desc{};
     desc.opcode = 1;
     desc.act_out_addr = out_addr;
+    desc.bias_addr = bias_off;
     desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
     desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
     desc.stride_h = 1; desc.stride_w = 1;

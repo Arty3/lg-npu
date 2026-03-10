@@ -40,9 +40,9 @@ module conv_backend
     output logic                bias_rd_req,
     /* verilator lint_off UNUSEDSIGNAL */
     input  logic                bias_rd_gnt,
+    /* verilator lint_on UNUSEDSIGNAL */
     input  logic [DATA_W-1:0]   bias_rd_rdata,
     input  logic                bias_rd_rvalid,
-    /* verilator lint_on UNUSEDSIGNAL */
 
     // Status
     output logic                done,
@@ -242,9 +242,16 @@ module conv_backend
             pp_trigger_r <= pp_trigger;
     end
 
-    // Bias data arrives one cycle after request
+    // Bias data: latch when rvalid fires so it stays stable through
+    // the postproc pipeline (SRAM rdata may be overwritten by the
+    // next weight read before the postproc samples it).
     logic signed [DATA_W-1:0] bias_val;
-    assign bias_val = bias_rd_rdata;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            bias_val <= '0;
+        else if (bias_rd_rvalid)
+            bias_val <= bias_rd_rdata;
+    end
 
     // PE backpressure: stall when processing a last-inner result
     logic pp_in_ready;
@@ -306,9 +313,9 @@ module conv_backend
     );
 
     // Gate done/busy so the backend waits for the write pipeline to drain
-    logic pipe_empty;
+    logic  pipe_empty;
     assign pipe_empty = ~pp_trigger_r & ~pp_out_valid & ~wr_addr_valid
-                      & pp_out_ready & ~wr_done;
+                      &  pp_out_ready & ~wr_done;
 
     // ctrl_done is a 1-cycle pulse; latch it until the pipeline empties
     logic ctrl_finished;
@@ -322,6 +329,6 @@ module conv_backend
     end
 
     assign done = (ctrl_done | ctrl_finished) & pipe_empty;
-    assign busy = ctrl_busy | ~pipe_empty | ctrl_finished;
+    assign busy =  ctrl_busy | ~pipe_empty | ctrl_finished;
 
 endmodule : conv_backend

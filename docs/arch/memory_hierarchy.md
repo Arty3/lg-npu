@@ -41,7 +41,9 @@ single-port SRAM (`mem_macro_wrap`) behind a `req/gnt/rvalid` protocol.
 | Activation | `npu_act_buffer` | 8192 (2x4096) | 8 b | 8 KiB | `0x2_0000` |
 | Psum | `npu_psum_buffer` | 4096 | 32 b | 16 KiB | `0x3_0000` |
 
-- **Weight buffer**: Single-port. Backend read has priority over host.
+- **Weight buffer**: Single-port, holds both filter kernels and bias values.
+  Weight and bias reads are time-multiplexed on the single backend read port;
+  backend read has priority over host.
 - **Activation buffer**: Single-port, double-sized (input + output share
   the address space). Three requesters arbitrated with fixed priority:
   backend write > backend read > host.

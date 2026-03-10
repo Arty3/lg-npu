@@ -34,7 +34,7 @@ single element at position (n, h, w, c) sits at byte offset
 
 | Buffer | Contents | Element type | Logical shape |
 |--------|----------|-------------|---------------|
-| Weight buffer | Filter kernels | INT8 | K x R x S x C (stored as NHWC with N = K) |
+| Weight buffer | Filter kernels + bias values | INT8 | K x R x S x C weights, then K bias values |
 | Activation buffer (input) | Input feature map | INT8 | 1 x H x W x C |
 | Activation buffer (output) | Output feature map | INT8 | 1 x OH x OW x K |
 | Partial-sum buffer | Accumulator state | INT32 | 1 x OH x OW x K |

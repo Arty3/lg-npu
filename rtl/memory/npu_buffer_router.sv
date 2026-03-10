@@ -66,6 +66,21 @@ module npu_buffer_router
     assign host_act_offset  = host_addr[SRAM_ADDR_W:0];
     assign host_psum_offset = host_addr[SRAM_ADDR_W-1:0];
 
+    // Mux weight and bias reads onto the single weight-buffer backend port.
+    // By construction these are never simultaneous: bias fires when the
+    // conv_loader is in S_DONE (weight requests only happen in S_REQ).
+    logic                    wt_be_sel_bias;
+    logic [SRAM_ADDR_W-1:0]  wt_be_addr;
+    logic                    wt_be_req;
+    logic                    wt_be_gnt;
+    logic [DATA_W-1:0]       wt_be_rdata;
+    logic                    wt_be_rvalid;
+
+    assign wt_be_sel_bias = be_bias_req;
+    assign wt_be_addr     = wt_be_sel_bias ? be_bias_addr[SRAM_ADDR_W-1:0]
+                                           : be_wt_addr[SRAM_ADDR_W-1:0];
+    assign wt_be_req      = be_wt_req | be_bias_req;
+
     // Weight buffer instance
     logic                   wt_host_gnt, wt_host_rvalid;
     logic [DATA_W-1:0]      wt_host_rdata;
@@ -80,20 +95,29 @@ module npu_buffer_router
         .host_gnt     (wt_host_gnt),
         .host_rdata   (wt_host_rdata),
         .host_rvalid  (wt_host_rvalid),
-        .be_addr      (be_wt_addr[SRAM_ADDR_W-1:0]),
-        .be_req       (be_wt_req),
-        .be_gnt       (be_wt_gnt),
-        .be_rdata     (be_wt_rdata),
-        .be_rvalid    (be_wt_rvalid)
+        .be_addr      (wt_be_addr),
+        .be_req       (wt_be_req),
+        .be_gnt       (wt_be_gnt),
+        .be_rdata     (wt_be_rdata),
+        .be_rvalid    (wt_be_rvalid)
     );
 
-    // Bias reads share the weight buffer (bias is stored as part of weights)
-    // For simplicity, bias requests are treated as weight-buffer reads.
-    // TODO: When both bias and weight read happen simultaneously,
-    //       they will need a second port or time-multiplexing.
-    assign be_bias_gnt    = 1'b0;  // stub: bias is fetched inline
-    assign be_bias_rdata  = '0;
-    assign be_bias_rvalid = 1'b0;
+    // Route grant and response back to the correct requester
+    assign be_wt_gnt   = wt_be_gnt & ~wt_be_sel_bias;
+    assign be_bias_gnt = wt_be_gnt &  wt_be_sel_bias;
+
+    logic bias_was_sel;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            bias_was_sel <= 1'b0;
+        else if (wt_be_req & wt_be_gnt)
+            bias_was_sel <= wt_be_sel_bias;
+    end
+
+    assign be_wt_rdata    = wt_be_rdata;
+    assign be_wt_rvalid   = wt_be_rvalid & ~bias_was_sel;
+    assign be_bias_rdata  = wt_be_rdata;
+    assign be_bias_rvalid = wt_be_rvalid &  bias_was_sel;
 
     // Activation buffer instance
     logic                 act_host_gnt, act_host_rvalid;

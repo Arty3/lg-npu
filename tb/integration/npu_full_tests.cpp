@@ -141,12 +141,18 @@ static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
 
         int qshift = qshift_dist(rng);
 
-        // Generate random data
-        // NOTE: bias is stubbed to 0 in npu_buffer_router.sv (TODO),
-        // so we pass empty bias to match hardware behaviour.
+        // Generate random data with occasional bias
         auto act  = rand_fill(H * W * C, rng);
         auto wt   = rand_fill(K * R * S * C, rng);
         std::vector<int8_t> bias;
+        std::uniform_int_distribution<int> bias_coin(0, 2);  // ~1/3 chance of bias
+        if (bias_coin(rng) == 0)
+        {
+            bias.resize(K);
+            std::uniform_int_distribution<int> bval(-128, 127);
+            for (int b = 0; b < K; ++b)
+                bias[b] = static_cast<int8_t>(bval(rng));
+        }
 
         char name[128];
         snprintf(name, sizeof(name),
@@ -251,11 +257,64 @@ static void run_edge_value_tests(TestResult &r)
                           5, 5, 1, 1, 3, 3, 1, 1, 0, 0, 0));
     }
 
-    // 2h: Bias is NOT YET IMPLEMENTED in hardware (stubbed to 0 in
-    //     npu_buffer_router.sv). When bias support is added, uncomment
-    //     the tests below and remove this placeholder.
-    //     { bias=+127 } and { bias=-128 (ReLU->0) }
-    printf("  [SKIP] bias tests (not yet implemented in HW)\n");
+    // 2h: Bias tests
+    // Positive bias: acc = 9*1*1 = 9, bias = +50 -> acc = 59, ReLU -> 59, q=0 -> 59
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "bias +50",
+                          const_fill(4 * 4 * 1, 1),
+                          const_fill(1 * 3 * 3 * 1, 1),
+                          const_fill(1, 50),
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0));
+    }
+    // Max positive bias: acc = 0, bias = +127 -> 127, q=0 -> 127
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "bias +127 (max)",
+                          const_fill(4 * 4 * 1, 0),
+                          const_fill(1 * 3 * 3 * 1, 0),
+                          const_fill(1, 127),
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0));
+    }
+    // Negative bias causing ReLU clamp: acc = 9*1*1 = 9, bias = -128 -> -119, ReLU -> 0
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "bias -128 (ReLU clamp)",
+                          const_fill(4 * 4 * 1, 1),
+                          const_fill(1 * 3 * 3 * 1, 1),
+                          const_fill(1, -128),
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0));
+    }
+    // Multi-filter bias: K=2, each filter gets its own bias
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> bias = {10, -20};
+        r.record(run_test(tb, "bias K=2 per-filter",
+                          seq_fill(4 * 4 * 1, 1),
+                          const_fill(2 * 3 * 3 * 1, 1),
+                          bias,
+                          4, 4, 1, 2, 3, 3, 1, 1, 0, 0, 0));
+    }
+    // Bias with quantization: acc = 9*127*127 = 145161, bias = 100 -> 145261
+    // >> 11 = 70
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "bias + qshift=11",
+                          const_fill(4 * 4 * 1, 127),
+                          const_fill(1 * 3 * 3 * 1, 127),
+                          const_fill(1, 100),
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 11));
+    }
 
     // 2i: Large positive accumulation with different quant shifts
     // C=4, K=1, 3x3: acc_max = 9 * 4 * 127 * 127 = 580644

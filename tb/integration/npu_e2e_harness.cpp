@@ -148,6 +148,11 @@ public:
                        static_cast<uint8_t>(weights[i]), got);
         }
 
+        // Zero-fill bias region (K entries after weights)
+        int bias_off = OUT_K * FILT_R * FILT_S * IN_C;
+        for (int k = 0; k < OUT_K; ++k)
+            mmio_write(WEIGHT_BUF_BASE + bias_off + k, 0);
+
         // Load activations into SRAM
         printf("[E2E] Loading %d activations\n", IN_H * IN_W * IN_C);
         for (int i = 0; i < IN_H * IN_W * IN_C; ++i)
@@ -160,7 +165,8 @@ public:
         cmd[1]  = 0;             // act_in_addr
         cmd[2]  = ACT_OUT_ADDR;  // act_out_addr
         cmd[3]  = 0;             // weight_addr
-        cmd[4]  = 0;             // bias_addr (stubbed)
+        // Bias region starts right after the weights (zero-filled above)
+        cmd[4]  = OUT_K * FILT_R * FILT_S * IN_C;  // bias_addr
         cmd[5]  = IN_H;
         cmd[6]  = IN_W;
         cmd[7]  = IN_C;

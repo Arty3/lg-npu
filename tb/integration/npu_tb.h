@@ -324,9 +324,18 @@ public:
         // Load weights
         load_bytes(WEIGHT_BUF_BASE + wt_addr, wt);
 
-        // Load biases (if any) into weight buffer after weights
+        // Hardware always reads K bias values; when none are supplied,
+        // place zeros after the weights so the bias read returns 0.
         if (!bias.empty())
+        {
             load_bytes(WEIGHT_BUF_BASE + bias_addr, bias);
+        }
+        else
+        {
+            bias_addr = wt_addr + static_cast<uint32_t>(wt.size());
+            for (int i = 0; i < K; ++i)
+                mmio_write(WEIGHT_BUF_BASE + bias_addr + static_cast<uint32_t>(i), 0);
+        }
 
         // Load activations
         load_bytes(ACT_BUF_BASE + act_in_addr, act);
