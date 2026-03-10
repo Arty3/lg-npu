@@ -58,6 +58,11 @@ rtl/memory/npu_dma_writer.sv
 rtl/memory/npu_dma_frontend.sv
 rtl/memory/npu_scratchpad.sv
 
+// --- Softmax backend --------------------------------------------------------
+rtl/backends/softmax/softmax_exp_lut.sv
+rtl/backends/softmax/softmax_ctrl.sv
+rtl/backends/softmax/softmax_backend.sv
+
 // --- GEMM backend -----------------------------------------------------------
 rtl/backends/gemm/gemm_addr_gen.sv
 rtl/backends/gemm/gemm_ctrl.sv

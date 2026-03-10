@@ -108,6 +108,26 @@ struct GemmDesc
     }
 };
 
+// Softmax command descriptor (16 words, same transport as ConvDesc)
+struct SoftmaxDesc
+{
+    uint32_t opcode   = 3;  // OP_SOFTMAX
+    uint32_t in_addr  = 0;  // Input base (activation buffer)
+    uint32_t out_addr = 0;  // Output base (activation buffer)
+    uint32_t num_rows = 0;  // M - independent softmax rows
+    uint32_t row_len  = 0;  // N - elements per row
+
+    void to_words(uint32_t out[16]) const
+    {
+        std::memset(out, 0, sizeof(uint32_t) * 16);
+        out[0] = opcode;
+        out[1] = in_addr;
+        out[2] = out_addr;
+        out[5] = num_rows;
+        out[6] = row_len;
+    }
+};
+
 // Activation mode constants (match act_mode_e in npu_types_pkg.sv)
 static constexpr uint32_t ACT_MODE_NONE       = 0;
 static constexpr uint32_t ACT_MODE_RELU       = 1;
@@ -213,6 +233,63 @@ inline std::vector<int8_t> ref_conv(
                 if (acc < -128) acc = -128;
                 out[(oh * OW + ow) * K + k] = static_cast<int8_t>(acc);
             }
+        }
+    }
+    return out;
+}
+
+// Softmax exp approximation matching hardware (softmax_exp_lut.sv)
+//   Decompose diff into int_part (d[7:5]) and frac_part (d[4:0]).
+//   Result = (exp_int[int_part] * exp_frac[frac_part]) >> 16.
+inline uint16_t softmax_exp_approx(uint8_t diff)
+{
+    static const uint16_t exp_int[8] = {
+        65535, 24109, 8869, 3263, 1200, 442, 162, 60
+    };
+    static const uint16_t exp_frac[32] = {
+        65535, 63519, 61564, 59670, 57834, 56055, 54330, 52659,
+        51039, 49468, 47946, 46471, 45042, 43656, 42313, 41011,
+        39749, 38526, 37341, 36192, 35078, 33999, 32953, 31939,
+        30957, 30004, 29081, 28186, 27319, 26479, 25664, 24874
+    };
+    uint32_t product = static_cast<uint32_t>(exp_int[diff >> 5])
+                     * static_cast<uint32_t>(exp_frac[diff & 31]);
+    return static_cast<uint16_t>(product >> 16);
+}
+
+// C++ reference softmax (INT8 in -> INT8 out [0,127])
+//   Uses same two-table exp LUT decomposition as hardware for
+//   bit-exact matching.
+inline std::vector<int8_t> ref_softmax(
+    const std::vector<int8_t> &input,
+    int num_rows, int row_len)
+{
+    std::vector<int8_t> out(num_rows * row_len);
+    for (int r = 0; r < num_rows; ++r)
+    {
+        int base = r * row_len;
+        // Pass 1: find max
+        int8_t max_val = -128;
+        for (int i = 0; i < row_len; ++i)
+            if (input[base + i] > max_val) max_val = input[base + i];
+        // Pass 2: compute exp and accumulate sum
+        uint32_t sum = 0;
+        for (int i = 0; i < row_len; ++i)
+        {
+            uint8_t diff = static_cast<uint8_t>(max_val) -
+                           static_cast<uint8_t>(input[base + i]);
+            sum += softmax_exp_approx(diff);
+        }
+        // Pass 3: normalize - matches hardware restoring divider (floor)
+        for (int i = 0; i < row_len; ++i)
+        {
+            uint8_t diff = static_cast<uint8_t>(max_val) -
+                           static_cast<uint8_t>(input[base + i]);
+            uint16_t exp_val = softmax_exp_approx(diff);
+            uint32_t numer = static_cast<uint32_t>(exp_val) * 127u;
+            uint8_t quot = static_cast<uint8_t>(numer / sum);
+            if (quot > 127) quot = 127;
+            out[base + i] = static_cast<int8_t>(quot);
         }
     }
     return out;
@@ -383,6 +460,17 @@ public:
         run_clocks(2000);
     }
 
+    // Submit a softmax command and ring the doorbell
+    void submit_softmax(const SoftmaxDesc &desc)
+    {
+        uint32_t words[16];
+        desc.to_words(words);
+        for (int i = 0; i < 16; ++i)
+            mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+        mmio_write(REG_DOORBELL, 1);
+        run_clocks(2000);
+    }
+
     // Wait for the NPU to become idle, with a cycle timeout.
     // Returns true if idle was reached, false on timeout.
     bool wait_idle(int max_polls = 200000)
@@ -542,6 +630,48 @@ public:
         }
 
         auto got = read_bytes(ACT_BUF_BASE + c_addr, out_size);
+        bool pass = true;
+        for (int i = 0; i < out_size; ++i)
+        {
+            if (got[i] != expected[i])
+            {
+                printf("  [FAIL] %s: output[%d] expected %d, got %d\n",
+                       name, i, expected[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // Run a softmax end-to-end: load data, fire command, wait, read back.
+    bool run_softmax_test(
+        const char *name,
+        const std::vector<int8_t> &input,
+        int num_rows, int row_len,
+        uint32_t in_addr  = 0,
+        uint32_t out_addr = 2048)
+    {
+        auto expected = ref_softmax(input, num_rows, row_len);
+        int out_size = static_cast<int>(expected.size());
+
+        load_bytes(ACT_BUF_BASE + in_addr, input);
+
+        SoftmaxDesc desc{};
+        desc.in_addr  = in_addr;
+        desc.out_addr = out_addr;
+        desc.num_rows = static_cast<uint32_t>(num_rows);
+        desc.row_len  = static_cast<uint32_t>(row_len);
+        submit_softmax(desc);
+
+        if (!wait_idle())
+        {
+            printf("  [FAIL] %s: TIMEOUT waiting for idle\n", name);
+            return false;
+        }
+
+        auto got = read_bytes(ACT_BUF_BASE + out_addr, out_size);
         bool pass = true;
         for (int i = 0; i < out_size; ++i)
         {

@@ -7,6 +7,7 @@
 //   4. Invalid-command combinations
 //   5. Activation function tests
 //   6. GEMM tests
+//   7. Softmax tests
 
 #include "npu_tb.h"
 
@@ -608,8 +609,8 @@ static void run_invalid_command_tests(TestResult &r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
-    // 4a: Bad opcodes (0, 3..15)
-    for (int op : {0, 3, 7, 15})
+    // 4a: Bad opcodes (0, 4..15)
+    for (int op : {0, 4, 7, 15})
     {
         NpuTb tb;
         tb.reset();
@@ -1124,6 +1125,125 @@ static void run_gemm_tests(TestResult &r)
     }
 }
 
+// Section 7: Softmax tests
+static void run_softmax_tests(TestResult &r)
+{
+    printf("\n--- Softmax Tests ---\n\n");
+
+    // 7a: Single element - output must be 127
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {42};
+        r.record(tb.run_softmax_test("softmax single", input, 1, 1));
+    }
+
+    // 7b: Two equal elements - each output = floor(65535*127 / (2*65535)) = 63
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {10, 10};
+        r.record(tb.run_softmax_test("softmax 2-equal", input, 1, 2));
+    }
+
+    // 7c: Four equal elements
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {-5, -5, -5, -5};
+        r.record(tb.run_softmax_test("softmax 4-equal", input, 1, 4));
+    }
+
+    // 7d: Peaked distribution (one dominant element)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {100, -50, -50, -50};
+        r.record(tb.run_softmax_test("softmax peaked", input, 1, 4));
+    }
+
+    // 7e: Sequential values (ascending)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {1, 2, 3, 4, 5, 6, 7, 8};
+        r.record(tb.run_softmax_test("softmax sequential", input, 1, 8));
+    }
+
+    // 7f: Multi-row (M=2, N=4) - two independent softmax operations
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {10, 10, 10, 10, 127, -128, -128, -128};
+        r.record(tb.run_softmax_test("softmax 2-row", input, 2, 4));
+    }
+
+    // 7g: All maximum value
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(8, 127);
+        r.record(tb.run_softmax_test("softmax all-max", input, 1, 8));
+    }
+
+    // 7h: All minimum value
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(4, -128);
+        r.record(tb.run_softmax_test("softmax all-min", input, 1, 4));
+    }
+
+    // 7i: Random softmax (small)
+    {
+        std::mt19937 rng(99);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto input = rand_fill(16, rng);
+        r.record(tb.run_softmax_test("softmax rand-16", input, 1, 16));
+    }
+
+    // 7j: Larger random softmax (M=3, N=8)
+    {
+        std::mt19937 rng(77);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto input = rand_fill(3 * 8, rng);
+        r.record(tb.run_softmax_test("softmax rand-3x8", input, 3, 8));
+    }
+
+    // 7k: Softmax then conv on same instance (backend interleave)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // First: softmax 1x4
+        std::vector<int8_t> sinput = {10, 20, 30, 40};
+        bool smax_ok = tb.run_softmax_test("smax-then-conv (smax)",
+                                           sinput, 1, 4);
+
+        // Second: conv 4x4x1 k3
+        auto ca  = seq_fill(4 * 4, 1);
+        auto cwt = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("smax-then-conv (conv)",
+                                        ca, cwt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        r.record(smax_ok && conv_ok);
+    }
+}
+
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
@@ -1141,6 +1261,7 @@ int main(int argc, char **argv)
     run_dimension_sweeps(r);
     run_activation_tests(r);
     run_gemm_tests(r);
+    run_softmax_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

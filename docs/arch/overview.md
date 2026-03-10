@@ -9,9 +9,9 @@ as possible:
 | Aspect | Decision |
 |--------|----------|
 | Data type | INT8 (signed 8-bit) exclusively. Weights, activations, and biases are all INT8; the MAC array accumulates into INT32, and a post-processing quantize step converts the result back to INT8. |
-| Compute | 2D convolution and general matrix multiply (GEMM). No pooling, element-wise, or attention operations. |
+| Compute | 2D convolution, general matrix multiply (GEMM), and softmax. No pooling or element-wise operations. |
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
-| Command interface | Two opcodes (`CONV`, `GEMM`). Software submits a descriptor that fully describes a single convolution tile or matrix multiply. |
+| Command interface | Three opcodes (`CONV`, `GEMM`, `SOFTMAX`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, or softmax operation. |
 | Memory | Local on-chip SRAM only (weight buffer, activation buffer, partial-sum buffer). No external DRAM path; no DMA transfers. Software pre-loads buffers before issuing the command. |
 | Platform | Simulation-only. No FPGA or ASIC bring-up. |
 
@@ -52,10 +52,13 @@ graph TD
         rb -- "config / status" --> sched
         sched --> dispatch
         dispatch -- "OP_GEMM" --> gemm
+        dispatch -- "OP_SOFTMAX" --> smax["softmax_backend"]
         dispatch -- "OP_CONV" --> conv
         gemm <--> mem_top
+        smax <--> mem_top
         conv <--> mem_top
         gemm --> completion
+        smax --> completion
         conv --> completion
         mem_top --> completion
 
@@ -95,9 +98,8 @@ Memory-mapped control/status register file. Provides:
 | `npu_cmd_decode` | Validates the opcode and extracts fields into an internal command struct. Exposes a `busy` output so the pipeline knows a decode is in flight. |
 | `npu_queue` | Shallow FIFO (depth configurable, default 4) that holds decoded commands until the core is ready. |
 
-Only two opcodes are defined: `CONV` and `GEMM`. Both share the same
-16-word descriptor layout; GEMM maps its fields (M, N, K, base addresses)
-onto the same word positions as the convolution parameters. See
+Three opcodes are defined: `CONV`, `GEMM`, and `SOFTMAX`. All share the
+same 16-word descriptor layout. See
 [command_format.md](../spec/command_format.md) for the full layout.
 
 ### Core (`rtl/core/npu_core.sv`)
@@ -107,7 +109,7 @@ Orchestrates command execution.
 | Module | Role |
 |--------|------|
 | `npu_scheduler` | Picks the next command from the queue. In the current scope this is trivial — in-order, one at a time. |
-| `npu_dispatch` | Routes the command to the appropriate backend based on opcode. GEMM commands are checked first. Memory port signals are muxed via a registered backend selector. |
+| `npu_dispatch` | Routes the command to the appropriate backend based on opcode (GEMM > Softmax > Conv priority). Memory port signals are muxed via a 2-bit registered backend selector. |
 | `npu_completion` | Tracks when the backend signals done, writes a completion entry, and triggers `npu_irq_ctrl`. |
 | `npu_status` | Aggregates internal state into the status register read by the host. The idle flag accounts for backend busy, queue occupancy, **and** `cmd_pipe_busy` (fetch or decode in progress), preventing the host from seeing a false idle while a command is still being ingested. |
 
@@ -167,6 +169,20 @@ control and address generation front-end. Described in detail in
 Shared modules (`conv_loader`, `conv_array`, `conv_accum`, `conv_postproc`,
 `conv_writer`) are reused from the convolution backend. The loader runs
 with zero-padding disabled.
+
+### Softmax Backend (`rtl/backends/softmax/`)
+
+Row-wise softmax engine using a multi-pass algorithm over local SRAM.
+Does not use the weight buffer or PE array.
+
+| Module | Role |
+|--------|------|
+| `softmax_backend` | Top-level backend wrapper. Ties off unused weight/bias ports. |
+| `softmax_ctrl` | Multi-pass FSM: FIND_MAX -> EXP_SUM -> NORMALIZE (per-element serial divider). |
+| `softmax_exp_lut` | Combinational exp(-d/32) approximation via two small ROM tables (8-entry integer + 32-entry fractional). |
+
+Described in detail in
+[compute_dataflow.md](compute_dataflow.md#softmax-dataflow).
 
 ### Interrupt & Reset (`rtl/control/`)
 

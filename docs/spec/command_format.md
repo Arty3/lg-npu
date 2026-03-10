@@ -14,19 +14,19 @@ Source of truth: `include/pkg/npu_cmd_pkg.sv`.
 |--------|-------|-------------|
 | `OP_CONV` | `4'h1` | 2-D convolution (INT8 -> INT32 accumulate -> INT8 output) |
 | `OP_GEMM` | `4'h2` | General matrix multiply (INT8 -> INT32 accumulate -> INT8 output) |
+| `OP_SOFTMAX` | `4'h3` | Row-wise softmax (INT8 -> INT8 output in [0, 127]) |
 
 All other opcode values are reserved. The hardware rejects reserved opcodes
 by raising the error event (`decode_err`) which sets `IRQ_STATUS.PENDING`,
 discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 
-When both backends are idle, GEMM commands take dispatch priority over
-convolution commands.
+Dispatch priority: GEMM > Softmax > Convolution.
 
 ---
 
 ## Descriptor Layout
 
-Both `OP_CONV` and `OP_GEMM` share the same 16-word descriptor structure.
+All opcodes share the same 16-word descriptor structure.
 Fields that are unused by a given opcode should be written as zero.
 
 ### Convolution (`OP_CONV`)
@@ -73,6 +73,27 @@ GEMM reuses the same word positions as convolution. Unused convolution fields
 Unused upper bits within each 32-bit word are reserved and should be written
 as zero.
 
+### Softmax (`OP_SOFTMAX`)
+
+Softmax applies the softmax function independently to each row of an M x N
+matrix. Unused convolution fields (words 3-4, 7-15) must be zero.
+
+| Word | Field (Softmax alias) | Width | Description |
+|------|----------------------|-------|-------------|
+| 0 | `opcode` | 4 bits (LSBs) | `4'h3` |
+| 1 | `in_addr` | 16 bits | Input base address (activation buffer, row-major M x N) |
+| 2 | `out_addr` | 16 bits | Output base address (activation buffer, row-major M x N) |
+| 3-4 | reserved | - | Must be zero |
+| 5 | `num_rows` (M) | 16 bits | Number of independent softmax rows |
+| 6 | `row_len` (N) | 16 bits | Elements per row (softmax dimension) |
+| 7-15 | reserved | - | Must be zero |
+
+The output for each element is `floor(exp_approx(x_i) * 127 / sum)` where
+`exp_approx` uses a two-table LUT decomposition and `sum` is the sum of all
+approximated exponentials in the row. Output values are INT8 in [0, 127].
+
+The weight buffer and bias port are not used by softmax.
+
 ---
 
 ## Processing Flow
@@ -90,6 +111,8 @@ sequenceDiagram
         NPU->>NPU: conv_backend executes convolution
     else OP_GEMM
         NPU->>NPU: gemm_backend executes matrix multiply
+    else OP_SOFTMAX
+        NPU->>NPU: softmax_backend executes row-wise softmax
     end
     NPU-->>Host: Assert IRQ (if enabled)
     Host->>NPU: Read IRQ_STATUS, write IRQ_CLEAR

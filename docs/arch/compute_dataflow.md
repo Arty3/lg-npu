@@ -1,8 +1,8 @@
 # Compute Dataflow
 
 This document describes the execution model and data movement for the
-lg-npu compute backends: 2D convolution (`rtl/backends/conv/`) and general
-matrix multiply (`rtl/backends/gemm/`).
+lg-npu compute backends: 2D convolution (`rtl/backends/conv/`), general
+matrix multiply (`rtl/backends/gemm/`), and softmax (`rtl/backends/softmax/`).
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -349,9 +349,107 @@ stateDiagram-v2
 
 ### Backend Muxing
 
-`npu_core` uses a registered backend selector (`gemm_sel_r`) to mux
-memory port signals between the GEMM and convolution backends. The selector
-is set when a GEMM command is accepted and cleared when a convolution
-command is accepted. This avoids combinational loops through the memory
-subsystem while ensuring only the active backend drives the shared memory
-ports.
+`npu_core` uses a 2-bit registered backend selector (`be_sel_r`) to mux
+memory port signals between the GEMM, softmax, and convolution backends.
+The selector is set when a command is accepted by the corresponding backend
+and routes all memory request/response signals to the active backend.
+Only one backend is active at a time (in-order scheduler).
+
+---
+
+## Softmax Dataflow
+
+The softmax backend (`rtl/backends/softmax/`) computes the softmax function
+independently for each row of an M x N input matrix. All data types are
+INT8. The output is INT8 in the range [0, 127], representing probabilities
+scaled by 127.
+
+Unlike convolution and GEMM, softmax does not use the PE array,
+accumulator, or weight buffer. It operates directly on the activation
+buffer through a multi-pass FSM with an integrated serial divider.
+
+### Softmax Parameters
+
+| Symbol | Meaning |
+|--------|---------|
+| M | Number of independent softmax rows (`num_rows`) |
+| N | Elements per row (`row_len`) |
+
+### Algorithm
+
+For each of M rows, three passes over the N elements:
+
+```
+for row in 0 .. M-1:
+  // Pass 1: Find maximum value
+  max_val = -128
+  for i in 0 .. N-1:
+    max_val = max(max_val, input[row * N + i])
+
+  // Pass 2: Compute exp approximations and accumulate sum
+  sum = 0
+  for i in 0 .. N-1:
+    diff = uint8(max_val) - uint8(input[row * N + i])
+    exp_val = exp_lut(diff)       // uint16 approximation
+    sum += exp_val                // uint32 accumulator
+
+  // Pass 3: Normalize (serial per element)
+  for i in 0 .. N-1:
+    diff = uint8(max_val) - uint8(input[row * N + i])
+    exp_val = exp_lut(diff)
+    numer = exp_val * 127         // 23-bit
+    output[row * N + i] = clamp(numer / sum, 0, 127)  // INT8
+```
+
+### Exp LUT Approximation
+
+`softmax_exp_lut` approximates `exp(-d/32) * 65535` using a two-table
+decomposition that avoids a 256-entry ROM:
+
+$$\text{exp\_val} = \frac{\text{exp\_int}[d_{7:5}] \times \text{exp\_frac}[d_{4:0}]}{2^{16}}$$
+
+- `exp_int`: 8 entries, uint16 values of `round(65535 * exp(-k))` for k = 0..7
+- `exp_frac`: 32 entries, uint16 values of `round(65535 * exp(-f/32))` for f = 0..31
+
+The product of two 16-bit values gives a 32-bit result; the upper 16 bits
+are taken as the final approximation. This requires one 16x16 multiply and
+40 total ROM entries.
+
+### Serial Divider
+
+The normalize pass computes `(exp_val * 127) / sum` per element using a
+restoring binary divider. The 24-bit numerator is divided by the 32-bit
+sum over 24 clock cycles, producing an 8-bit quotient clamped to [0, 127].
+
+### Memory Ports
+
+| Port | Used | Purpose |
+|------|------|---------|
+| `act_rd` | Yes | Read input elements (all three passes) |
+| `out_wr` | Yes | Write output elements (normalize pass) |
+| `wt_rd` | No | Tied off |
+| `bias_rd` | No | Tied off |
+
+### FSM States
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> LOAD_CFG : cmd valid
+    LOAD_CFG --> FIND_MAX : parameters latched
+    FIND_MAX --> EXP_SUM : max found
+    EXP_SUM --> NORM_RD : sum accumulated
+    NORM_RD --> NORM_WAIT : read issued
+    NORM_WAIT --> NORM_DIV : data received
+    NORM_DIV --> NORM_WR : division complete (24 cycles)
+    NORM_WR --> NORM_RD : more elements in row
+    NORM_WR --> FIND_MAX : next row
+    NORM_WR --> DONE : last row complete
+    DONE --> IDLE : completion handshake
+```
+
+### Cycle Count
+
+Per row: approximately `2 * N + 27 * N` cycles (two pipelined read passes
+plus ~27 cycles per element for the serial normalize pass). Total for a
+full operation: `M * (29 * N + overhead)`.
