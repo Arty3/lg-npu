@@ -97,3 +97,46 @@ These documents correspond closely with the main project components:
 | `sw/` | Driver and runtime interface for the NPU. |
 | `fpga/` | FPGA integration and board support. |
 | `asic/` | ASIC synthesis, layout, and sign-off flow. |
+| `tools/` | Linting, formatting, code generation, and utility scripts. |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- [Verilator](https://verilator.org/) 5.x (`verilator --version`)
+- GNU Make
+- Bash (for simulation scripts)
+- Python 3.9+ (for generators and reference models)
+
+### Build Targets
+
+Run `make help` to list all targets. The most common ones:
+
+```bash
+make lint              # Verilator lint (zero-warning gate)
+make compile           # Verilate -> C++ model
+make sim-unit          # Run unit-level testbenches
+make sim-block         # Run block-level testbenches
+make sim-integration   # Run integration testbenches
+make sim-e2e           # End-to-end convolution test (compile + run)
+make sim-smoke         # Smoke regression (unit + block)
+make sim-full          # Full regression (all levels)
+make vectors           # Generate test vectors from Python models
+make format            # Auto-format SV / shell / Python
+make gen               # Regenerate SV packages + C headers
+make viz               # Generate architecture diagrams
+make waves             # Open latest waveform in Surfer viewer
+make check-tree        # Validate project directory structure
+make clean             # Remove build artifacts
+```
+
+### Running Lint
+
+```bash
+make lint
+```
+
+This invokes Verilator with `-Wall` on all RTL via
+`tools/lint/rtl.f`. The design must pass with zero warnings.

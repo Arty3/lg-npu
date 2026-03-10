@@ -10,6 +10,8 @@ In your response, explicitly mention which file(s) you used (e.g. /README.md, do
 
 Inform the user if you are unable to access these files and can therefore not use them.
 
+Use WSL for shell commands, the project is made on WSL.
+
 ## Persona & Tone
 
 - Concise, neutral, code-focused. Prioritize correctness and readability.
@@ -24,6 +26,34 @@ Inform the user if you are unable to access these files and can therefore not us
 
 - Follow `.editorconfig` exactly.
 - For *.md documents, you are to use mermaid graphs when appropriate.
+- Always use `++i` instead of `i++` where possible, therefore `i++` should only be used if increment should only happen *after*, otherwise always use `++i`
+- Place curly brackets on the next line, e.g.:
+```verilog
+// Bad
+typedef enum logic [1:0] {
+	S_IDLE,
+	S_CHECK,
+	S_VALID
+} state_e;
+
+// Good
+typedef enum logic [1:0]
+{
+	S_IDLE,
+	S_CHECK,
+	S_VALID
+}   state_e;
+```
+- Avoid extra symbols in comments for separation, e.g.:
+```verilog
+// -----------
+// Section     (bad)
+// -----------
+
+// Section     (good)
+```
+- Avoid overusing UTF-8 characters in comments, prefer ASCII.
+- File banners must have a new line in between them and the file contents. 
 
 ## Verifications
 
