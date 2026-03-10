@@ -13,7 +13,8 @@ package npu_cmd_pkg;
         OP_GEMM    = 4'h2,
         OP_SOFTMAX = 4'h3,
         OP_VEC     = 4'h4,
-        OP_LNORM   = 4'h5
+        OP_LNORM   = 4'h5,
+        OP_POOL    = 4'h6
     }   opcode_e;
 
     // Convolution command descriptor

@@ -10,6 +10,7 @@
 //   7. Softmax tests
 //   8. Vec tests
 //   9. LayerNorm tests
+//  10. Pooling tests
 
 #include "npu_tb.h"
 
@@ -735,13 +736,179 @@ static void run_lnorm_tests(TestResult &r)
     }
 }
 
+// Section 10: Pooling tests
+static void run_pool_tests(TestResult &r)
+{
+    printf("\n--- Pooling Tests ---\n\n");
+
+    // 10a: Max pool 2x2 stride 1 on 3x3x1
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        // 3x3 input (NHWC, C=1):
+        //  1  2  3
+        //  4  5  6
+        //  7  8  9
+        std::vector<int8_t> input = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+        r.record(tb.run_pool_test("maxpool 2x2 s1 3x3x1",
+                                  input, 3, 3, 1, 2, 2, 1, 1, 0, 0, 0));
+    }
+
+    // 10b: Max pool 2x2 stride 2 on 4x4x1
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {
+            1,  2,  3,  4,
+            5,  6,  7,  8,
+            9,  10, 11, 12,
+            13, 14, 15, 16
+        };
+        r.record(tb.run_pool_test("maxpool 2x2 s2 4x4x1",
+                                  input, 4, 4, 1, 2, 2, 2, 2, 0, 0, 0));
+    }
+
+    // 10c: Avg pool 2x2 stride 1 on 3x3x1
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {4, 8, 12, 16, 20, 24, 28, 32, 36};
+        r.record(tb.run_pool_test("avgpool 2x2 s1 3x3x1",
+                                  input, 3, 3, 1, 2, 2, 1, 1, 0, 0, 1));
+    }
+
+    // 10d: Max pool with padding
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {1, 2, 3, 4};
+        // 2x2 input, 2x2 pool, stride 1, pad 1 -> 3x3 output
+        r.record(tb.run_pool_test("maxpool 2x2 s1 pad1 2x2x1",
+                                  input, 2, 2, 1, 2, 2, 1, 1, 1, 1, 0));
+    }
+
+    // 10e: Max pool multi-channel (C=2)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        // 2x2x2 NHWC: [(1,10), (2,20), (3,30), (4,40)]
+        std::vector<int8_t> input = {1, 10, 2, 20, 3, 30, 4, 40};
+        r.record(tb.run_pool_test("maxpool 2x2 s1 2x2x2",
+                                  input, 2, 2, 2, 2, 2, 1, 1, 0, 0, 0));
+    }
+
+    // 10f: Avg pool multi-channel (C=2)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {4, 8, 12, 16, 20, 24, 28, 32};
+        r.record(tb.run_pool_test("avgpool 2x2 s1 2x2x2",
+                                  input, 2, 2, 2, 2, 2, 1, 1, 0, 0, 1));
+    }
+
+    // 10g: Max pool all-negative (should still find max)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {-128, -64, -32, -16};
+        r.record(tb.run_pool_test("maxpool all-negative",
+                                  input, 2, 2, 1, 2, 2, 1, 1, 0, 0, 0));
+    }
+
+    // 10h: Avg pool with rounding toward zero
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        // Sum = 1+2+3+4 = 10, 10/4 = 2 (truncated)
+        std::vector<int8_t> input = {1, 2, 3, 4};
+        r.record(tb.run_pool_test("avgpool rounding",
+                                  input, 2, 2, 1, 2, 2, 1, 1, 0, 0, 1));
+    }
+
+    // 10i: Avg pool with padding (pad contributes zeros)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {10, 20, 30, 40};
+        r.record(tb.run_pool_test("avgpool 2x2 s1 pad1 2x2x1",
+                                  input, 2, 2, 1, 2, 2, 1, 1, 1, 1, 1));
+    }
+
+    // 10j: Random max pool
+    {
+        std::mt19937 rng(401);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(4 * 4 * 2);
+        std::uniform_int_distribution<int> dist(-128, 127);
+        for (auto &x : input) x = static_cast<int8_t>(dist(rng));
+        r.record(tb.run_pool_test("maxpool rand 4x4x2 k2 s2",
+                                  input, 4, 4, 2, 2, 2, 2, 2, 0, 0, 0));
+    }
+
+    // 10k: Random avg pool
+    {
+        std::mt19937 rng(402);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(3 * 3 * 2);
+        std::uniform_int_distribution<int> dist(-128, 127);
+        for (auto &x : input) x = static_cast<int8_t>(dist(rng));
+        r.record(tb.run_pool_test("avgpool rand 3x3x2 k2 s1",
+                                  input, 3, 3, 2, 2, 2, 1, 1, 0, 0, 1));
+    }
+
+    // 10l: Pool-then-conv interleave
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // First: max pool 3x3x1 k2 s1
+        std::vector<int8_t> pool_in = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+        bool pool_ok = tb.run_pool_test("pool-then-conv (pool)",
+                                        pool_in, 3, 3, 1, 2, 2, 1, 1, 0, 0, 0);
+
+        // Second: conv 4x4x1 k3
+        auto ca  = seq_fill(4 * 4, 1);
+        auto cwt = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("pool-then-conv (conv)",
+                                        ca, cwt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        r.record(pool_ok && conv_ok);
+    }
+
+    // 10m: Max pool 3x3 stride 2 on 5x5x1
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(25);
+        for (int i = 0; i < 25; ++i) input[i] = static_cast<int8_t>(i + 1);
+        r.record(tb.run_pool_test("maxpool 3x3 s2 5x5x1",
+                                  input, 5, 5, 1, 3, 3, 2, 2, 0, 0, 0));
+    }
+}
+
 // Section 4: Invalid-command and error-path tests
 static void run_invalid_command_tests(TestResult &r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
     // 4a: Bad opcodes (0, 6..15)
-    for (int op : {0, 6, 7, 15})
+    for (int op : {0, 7, 8, 15})
     {
         NpuTb tb;
         tb.reset();
@@ -1518,6 +1685,7 @@ int main(int argc, char **argv)
     run_softmax_tests(r);
     run_vec_tests(r);
     run_lnorm_tests(r);
+    run_pool_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

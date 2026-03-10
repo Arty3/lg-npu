@@ -1,6 +1,6 @@
 // ============================================================================
 // npu_core.sv - Core: scheduler -> dispatch -> backends + memory + completion
-//   Supports GEMM, softmax, vec, lnorm, and convolution backends.  Only one
+//   Supports GEMM, softmax, vec, lnorm, pool, and convolution backends.  Only one
 //   backend is active at a time (in-order scheduler).  Memory ports are muxed
 //   based on which backend is busy.
 // ============================================================================
@@ -59,6 +59,10 @@ module npu_core
     conv_cmd_t lnorm_be_cmd;
     logic      lnorm_be_cmd_valid, lnorm_be_cmd_ready;
 
+    // Dispatch -> Pool backend
+    conv_cmd_t pool_be_cmd;
+    logic      pool_be_cmd_valid, pool_be_cmd_ready;
+
     logic be_done, be_busy;
 
     npu_scheduler u_sched (
@@ -89,6 +93,9 @@ module npu_core
         .lnorm_cmd         (lnorm_be_cmd),
         .lnorm_cmd_valid   (lnorm_be_cmd_valid),
         .lnorm_cmd_ready   (lnorm_be_cmd_ready),
+        .pool_cmd          (pool_be_cmd),
+        .pool_cmd_valid    (pool_be_cmd_valid),
+        .pool_cmd_ready    (pool_be_cmd_ready),
         .conv_cmd          (conv_be_cmd),
         .conv_cmd_valid    (conv_be_cmd_valid),
         .conv_cmd_ready    (conv_be_cmd_ready)
@@ -292,9 +299,46 @@ module npu_core
         .busy           (lnorm_busy)
     );
 
+    // Pool backend
+    logic [ADDR_W-1:0] pool_act_rd_addr, pool_wt_rd_addr, pool_out_wr_addr;
+    logic [DATA_W-1:0] pool_out_wr_data;
+    logic              pool_act_rd_req,  pool_wt_rd_req,  pool_out_wr_req;
+    logic [ADDR_W-1:0] pool_bias_addr;
+    logic              pool_bias_req;
+    logic              pool_done, pool_busy;
+
+    pool_backend u_pool (
+        .clk            (clk),
+        .rst_n          (rst_n),
+        .cmd            (pool_be_cmd),
+        .cmd_valid      (pool_be_cmd_valid),
+        .cmd_ready      (pool_be_cmd_ready),
+        .act_rd_addr    (pool_act_rd_addr),
+        .act_rd_req     (pool_act_rd_req),
+        .act_rd_gnt     (be_act_rd_gnt),
+        .act_rd_rdata   (be_act_rd_rdata),
+        .act_rd_rvalid  (be_act_rd_rvalid),
+        .wt_rd_addr     (pool_wt_rd_addr),
+        .wt_rd_req      (pool_wt_rd_req),
+        .wt_rd_gnt      (be_wt_rd_gnt),
+        .wt_rd_rdata    (be_wt_rd_rdata),
+        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .out_wr_addr    (pool_out_wr_addr),
+        .out_wr_data    (pool_out_wr_data),
+        .out_wr_req     (pool_out_wr_req),
+        .out_wr_gnt     (be_out_wr_gnt),
+        .bias_rd_addr   (pool_bias_addr),
+        .bias_rd_req    (pool_bias_req),
+        .bias_rd_gnt    (be_bias_gnt),
+        .bias_rd_rdata  (be_bias_rdata),
+        .bias_rd_rvalid (be_bias_rvalid),
+        .done           (pool_done),
+        .busy           (pool_busy)
+    );
+
     // Memory port mux (registered selector avoids combinational loops)
     // 3'b000 = conv (default), 3'b001 = gemm, 3'b010 = softmax,
-    // 3'b011 = vec, 3'b100 = lnorm
+    // 3'b011 = vec, 3'b100 = lnorm, 3'b101 = pool
     logic [2:0] be_sel_r;
     always_ff @(posedge clk or negedge rst_n)
     begin
@@ -308,6 +352,8 @@ module npu_core
             be_sel_r <= 3'b011;
         else if (lnorm_be_cmd_valid && lnorm_be_cmd_ready)
             be_sel_r <= 3'b100;
+        else if (pool_be_cmd_valid && pool_be_cmd_ready)
+            be_sel_r <= 3'b101;
         else if (conv_be_cmd_valid && conv_be_cmd_ready)
             be_sel_r <= 3'b000;
     end
@@ -359,6 +405,17 @@ module npu_core
                 be_bias_addr   = lnorm_bias_addr;
                 be_bias_req    = lnorm_bias_req;
             end
+            3'b101: begin
+                be_act_rd_addr = pool_act_rd_addr;
+                be_act_rd_req  = pool_act_rd_req;
+                be_wt_rd_addr  = pool_wt_rd_addr;
+                be_wt_rd_req   = pool_wt_rd_req;
+                be_out_wr_addr = pool_out_wr_addr;
+                be_out_wr_data = pool_out_wr_data;
+                be_out_wr_req  = pool_out_wr_req;
+                be_bias_addr   = pool_bias_addr;
+                be_bias_req    = pool_bias_req;
+            end
             default: begin
                 be_act_rd_addr = conv_act_rd_addr;
                 be_act_rd_req  = conv_act_rd_req;
@@ -373,8 +430,8 @@ module npu_core
         endcase
     end
 
-    assign be_done = gemm_done | smax_done | conv_done | vec_done | lnorm_done;
-    assign be_busy = gemm_busy | smax_busy | conv_busy | vec_busy | lnorm_busy;
+    assign be_done = gemm_done | smax_done | conv_done | vec_done | lnorm_done | pool_done;
+    assign be_busy = gemm_busy | smax_busy | conv_busy | vec_busy | lnorm_busy | pool_busy;
 
     // Memory top
     npu_mem_top u_mem (

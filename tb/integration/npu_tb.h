@@ -175,6 +175,42 @@ struct LnormDesc
     }
 };
 
+// Pool command descriptor (16 words, same transport as ConvDesc)
+struct PoolDesc
+{
+    uint32_t opcode    = 6;  // OP_POOL
+    uint32_t in_addr   = 0;  // Input base (activation buffer)
+    uint32_t out_addr  = 0;  // Output base (activation buffer)
+    uint32_t in_h      = 0;
+    uint32_t in_w      = 0;
+    uint32_t in_c      = 0;
+    uint32_t pool_r    = 0;  // Window height
+    uint32_t pool_s    = 0;  // Window width
+    uint32_t stride_h  = 0;
+    uint32_t stride_w  = 0;
+    uint32_t pad_h     = 0;
+    uint32_t pad_w     = 0;
+    uint32_t pool_mode = 0;  // 0=MAX, 1=AVG
+
+    void to_words(uint32_t out[16]) const
+    {
+        std::memset(out, 0, sizeof(uint32_t) * 16);
+        out[0]  = opcode;
+        out[1]  = in_addr;
+        out[2]  = out_addr;
+        out[5]  = in_h;
+        out[6]  = in_w;
+        out[7]  = in_c;
+        out[9]  = pool_r;
+        out[10] = pool_s;
+        out[11] = stride_h;
+        out[12] = stride_w;
+        out[13] = pad_h;
+        out[14] = pad_w;
+        out[15] = pool_mode & 0x1;
+    }
+};
+
 // Integer square root matching hardware digit-by-digit algorithm
 inline uint16_t isqrt_hw(uint32_t n)
 {
@@ -260,6 +296,83 @@ inline std::vector<int8_t> ref_lnorm(
                 else             result = static_cast<int32_t>(quot);
             }
             out[base + i] = static_cast<int8_t>(result);
+        }
+    }
+    return out;
+}
+
+// C++ reference pooling (INT8 in -> INT8 out)
+//   pool_mode=0: MAX pool, pool_mode=1: AVG pool
+//   2D spatial pooling over NHWC data with stride and padding.
+inline std::vector<int8_t> ref_pool(
+    const std::vector<int8_t> &input,
+    int H, int W, int C,
+    int pool_r, int pool_s,
+    int stride_h, int stride_w,
+    int pad_h, int pad_w,
+    int pool_mode)
+{
+    int OH = (H + 2 * pad_h - pool_r) / stride_h + 1;
+    int OW = (W + 2 * pad_w - pool_s) / stride_w + 1;
+    std::vector<int8_t> out(OH * OW * C);
+    int pool_area = pool_r * pool_s;
+
+    for (int oh = 0; oh < OH; ++oh)
+    {
+        for (int ow = 0; ow < OW; ++ow)
+        {
+            for (int c = 0; c < C; ++c)
+            {
+                if (pool_mode == 0)
+                {
+                    // MAX pool
+                    int8_t max_val = -128;
+                    for (int r = 0; r < pool_r; ++r)
+                    {
+                        for (int s = 0; s < pool_s; ++s)
+                        {
+                            int ih = oh * stride_h + r - pad_h;
+                            int iw = ow * stride_w + s - pad_w;
+                            if (ih >= 0 && ih < H && iw >= 0 && iw < W)
+                            {
+                                int8_t v = input[(ih * W + iw) * C + c];
+                                if (v > max_val) max_val = v;
+                            }
+                        }
+                    }
+                    out[(oh * OW + ow) * C + c] = max_val;
+                }
+                else
+                {
+                    // AVG pool - sum all window elements (0 for OOB) and
+                    // divide by full window area using restoring divider.
+                    int32_t sum = 0;
+                    for (int r = 0; r < pool_r; ++r)
+                    {
+                        for (int s = 0; s < pool_s; ++s)
+                        {
+                            int ih = oh * stride_h + r - pad_h;
+                            int iw = ow * stride_w + s - pad_w;
+                            if (ih >= 0 && ih < H && iw >= 0 && iw < W)
+                                sum += static_cast<int32_t>(input[(ih * W + iw) * C + c]);
+                        }
+                    }
+                    // Restoring divider (matches hardware): unsigned divide,
+                    // then restore sign and clamp.
+                    bool neg = (sum < 0);
+                    uint32_t abs_sum = neg ? static_cast<uint32_t>(-sum)
+                                          : static_cast<uint32_t>(sum);
+                    uint32_t quot = abs_sum / static_cast<uint32_t>(pool_area);
+                    int32_t result;
+                    if (neg)
+                        result = -static_cast<int32_t>(quot);
+                    else
+                        result = static_cast<int32_t>(quot);
+                    if (result > 127) result = 127;
+                    if (result < -128) result = -128;
+                    out[(oh * OW + ow) * C + c] = static_cast<int8_t>(result);
+                }
+            }
         }
     }
     return out;
@@ -671,6 +784,17 @@ public:
         run_clocks(2000);
     }
 
+    // Submit a pool command and ring the doorbell
+    void submit_pool(const PoolDesc &desc)
+    {
+        uint32_t words[16];
+        desc.to_words(words);
+        for (int i = 0; i < 16; ++i)
+            mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+        mmio_write(REG_DOORBELL, 1);
+        run_clocks(2000);
+    }
+
     // Wait for the NPU to become idle, with a cycle timeout.
     // Returns true if idle was reached, false on timeout.
     bool wait_idle(int max_polls = 200000)
@@ -959,6 +1083,61 @@ public:
         desc.row_len    = static_cast<uint32_t>(row_len);
         desc.norm_shift = static_cast<uint32_t>(norm_shift);
         submit_lnorm(desc);
+
+        if (!wait_idle())
+        {
+            printf("  [FAIL] %s: TIMEOUT waiting for idle\n", name);
+            return false;
+        }
+
+        auto got = read_bytes(ACT_BUF_BASE + out_addr, out_size);
+        bool pass = true;
+        for (int i = 0; i < out_size; ++i)
+        {
+            if (got[i] != expected[i])
+            {
+                printf("  [FAIL] %s: output[%d] expected %d, got %d\n",
+                       name, i, expected[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // Run a pool op end-to-end: load data, fire command, wait, read back.
+    bool run_pool_test(
+        const char *name,
+        const std::vector<int8_t> &input,
+        int H, int W, int C,
+        int pool_r, int pool_s,
+        int sh, int sw,
+        int ph, int pw,
+        int pool_mode,
+        uint32_t in_addr  = 0,
+        uint32_t out_addr = 2048)
+    {
+        auto expected = ref_pool(input, H, W, C, pool_r, pool_s,
+                                 sh, sw, ph, pw, pool_mode);
+        int out_size = static_cast<int>(expected.size());
+
+        load_bytes(ACT_BUF_BASE + in_addr, input);
+
+        PoolDesc desc{};
+        desc.in_addr   = in_addr;
+        desc.out_addr  = out_addr;
+        desc.in_h      = static_cast<uint32_t>(H);
+        desc.in_w      = static_cast<uint32_t>(W);
+        desc.in_c      = static_cast<uint32_t>(C);
+        desc.pool_r    = static_cast<uint32_t>(pool_r);
+        desc.pool_s    = static_cast<uint32_t>(pool_s);
+        desc.stride_h  = static_cast<uint32_t>(sh);
+        desc.stride_w  = static_cast<uint32_t>(sw);
+        desc.pad_h     = static_cast<uint32_t>(ph);
+        desc.pad_w     = static_cast<uint32_t>(pw);
+        desc.pool_mode = static_cast<uint32_t>(pool_mode);
+        submit_pool(desc);
 
         if (!wait_idle())
         {

@@ -62,6 +62,10 @@ rtl/memory/npu_scratchpad.sv
 rtl/backends/vec/vec_ctrl.sv
 rtl/backends/vec/vec_backend.sv
 
+// --- Pooling backend --------------------------------------------------------
+rtl/backends/pool/pool_ctrl.sv
+rtl/backends/pool/pool_backend.sv
+
 // --- LayerNorm backend ------------------------------------------------------
 rtl/backends/lnorm/lnorm_ctrl.sv
 rtl/backends/lnorm/lnorm_backend.sv

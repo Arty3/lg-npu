@@ -17,12 +17,13 @@ Source of truth: `include/pkg/npu_cmd_pkg.sv`.
 | `OP_SOFTMAX` | `4'h3` | Row-wise softmax (INT8 -> INT8 output in [0, 127]) |
 | `OP_VEC` | `4'h4` | Element-wise vector operation (ADD or MUL, INT8 -> INT8) |
 | `OP_LNORM` | `4'h5` | Row-wise layer normalisation (INT8 -> INT8) |
+| `OP_POOL` | `4'h6` | 2-D spatial pooling (MAX or AVG, INT8 -> INT8) |
 
 All other opcode values are reserved. The hardware rejects reserved opcodes
 by raising the error event (`decode_err`) which sets `IRQ_STATUS.PENDING`,
 discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 
-Dispatch priority: GEMM > Softmax > Vec > LayerNorm > Convolution.
+Dispatch priority: GEMM > Softmax > Vec > LayerNorm > Pool > Convolution.
 
 ---
 
@@ -151,6 +152,46 @@ $\hat{\sigma} = \text{isqrt}(\sigma^2 + 1)$ (integer square root, minimum 1).
 
 The weight buffer and bias port are not used by lnorm.
 
+### Pool (`OP_POOL`)
+
+Pool applies 2-D spatial max or average pooling over an H x W x C input
+tensor in NHWC layout. The weight buffer and bias port are not used.
+Unused fields (words 3-4, 8) must be zero.
+
+| Word | Field (Pool alias) | Width | Description |
+|------|-------------------|-------|-------------|
+| 0 | `opcode` | 4 bits (LSBs) | `4'h6` |
+| 1 | `in_addr` | 16 bits | Input base address (activation buffer) |
+| 2 | `out_addr` | 16 bits | Output base address (activation buffer) |
+| 3-4 | reserved | - | Must be zero |
+| 5 | `in_h` | 16 bits | Input height |
+| 6 | `in_w` | 16 bits | Input width |
+| 7 | `in_c` | 16 bits | Input channels |
+| 8 | reserved | - | Must be zero |
+| 9 | `pool_r` | 16 bits | Pooling window height |
+| 10 | `pool_s` | 16 bits | Pooling window width |
+| 11 | `stride_h` | 16 bits | Vertical stride |
+| 12 | `stride_w` | 16 bits | Horizontal stride |
+| 13 | `pad_h` | 16 bits | Vertical zero-padding (each side) |
+| 14 | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
+| 15 | `pool_mode` | 1 bit (bit [0]) | 0 = MAX pool, 1 = AVG pool |
+
+Output dimensions are the same as convolution:
+
+$$OH = \frac{H + 2 \cdot \text{pad\_h} - \text{pool\_r}}{\text{stride\_h}} + 1$$
+$$OW = \frac{W + 2 \cdot \text{pad\_w} - \text{pool\_s}}{\text{stride\_w}} + 1$$
+
+The output tensor shape is OH x OW x C (channels are preserved).
+
+**MAX pool** (`pool_mode = 0`): For each output position and channel, the
+maximum value across the pooling window is selected. Out-of-bounds
+positions due to padding are excluded (initialised to -128).
+
+**AVG pool** (`pool_mode = 1`): For each output position and channel, the
+sum of all window elements (zero for out-of-bounds) is divided by the
+full window area (`pool_r * pool_s`) using a serial restoring divider
+(32 cycles). The result is clamped to [-128, 127].
+
 ---
 
 ## Processing Flow
@@ -174,6 +215,8 @@ sequenceDiagram
         NPU->>NPU: vec_backend executes element-wise operation
     else OP_LNORM
         NPU->>NPU: lnorm_backend executes row-wise layer norm
+    else OP_POOL
+        NPU->>NPU: pool_backend executes spatial pooling
     end
     NPU-->>Host: Assert IRQ (if enabled)
     Host->>NPU: Read IRQ_STATUS, write IRQ_CLEAR

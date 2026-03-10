@@ -3,8 +3,9 @@
 This document describes the execution model and data movement for the
 lg-npu compute backends: 2D convolution (`rtl/backends/conv/`), general
 matrix multiply (`rtl/backends/gemm/`), softmax (`rtl/backends/softmax/`),
-element-wise vector operations (`rtl/backends/vec/`), and layer
-normalisation (`rtl/backends/lnorm/`).
+element-wise vector operations (`rtl/backends/vec/`), layer
+normalisation (`rtl/backends/lnorm/`), and 2D spatial pooling
+(`rtl/backends/pool/`).
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -352,10 +353,11 @@ stateDiagram-v2
 ### Backend Muxing
 
 `npu_core` uses a 3-bit registered backend selector (`be_sel_r`) to mux
-memory port signals between the GEMM, softmax, vec, lnorm, and convolution
-backends. The selector is set when a command is accepted by the corresponding
-backend and routes all memory request/response signals to the active backend.
-Only one backend is active at a time (in-order scheduler).
+memory port signals between the GEMM, softmax, vec, lnorm, pool, and
+convolution backends. The selector is set when a command is accepted by
+the corresponding backend and routes all memory request/response signals
+to the active backend. Only one backend is active at a time (in-order
+scheduler).
 
 ---
 
@@ -640,3 +642,98 @@ Per row: approximately `4 * N + 35 * N + 80` cycles (two pipelined read
 passes for sum and variance, serial mean/variance divisions and sqrt,
 plus ~35 cycles per element in the normalize pass for reading, dividing,
 and writing). Total for a full operation: `M * (39 * N + 80)`.
+
+---
+
+## Pool Dataflow
+
+The pool backend (`rtl/backends/pool/`) computes 2-D spatial max or average
+pooling over an H x W x C input tensor in NHWC layout. All data types are
+INT8. The output tensor has shape OH x OW x C (channels are preserved).
+
+Unlike convolution and GEMM, pool does not use the PE array, accumulator,
+weight buffer, or bias port. It operates directly on the activation buffer
+through a multi-loop FSM with an integrated serial divider for average mode.
+
+### Pool Parameters
+
+| Symbol | Meaning |
+|--------|---------|
+| H, W | Input spatial height and width |
+| C | Number of channels |
+| pool_r, pool_s | Pooling window height and width |
+| stride_h, stride_w | Vertical and horizontal stride |
+| pad_h, pad_w | Zero-padding applied to the input |
+| pool_mode | 0 = MAX, 1 = AVG |
+| OH, OW | Output dimensions (same formula as convolution) |
+
+### Algorithm
+
+```
+for oh in 0 .. OH-1:
+  for ow in 0 .. OW-1:
+    for c in 0 .. C-1:
+      if pool_mode == MAX:
+        result = -128
+        for r in 0 .. pool_r-1:
+          for s in 0 .. pool_s-1:
+            ih = oh * stride_h + r - pad_h
+            iw = ow * stride_w + s - pad_w
+            if (ih, iw) in bounds:
+              result = max(result, input[ih][iw][c])
+      else:  // AVG
+        sum = 0
+        for r in 0 .. pool_r-1:
+          for s in 0 .. pool_s-1:
+            ih = oh * stride_h + r - pad_h
+            iw = ow * stride_w + s - pad_w
+            if (ih, iw) in bounds:
+              sum += input[ih][iw][c]     // 0 for OOB
+        result = clamp(sum / (pool_r * pool_s), -128, 127)
+      output[oh][ow][c] = result
+```
+
+### Serial Restoring Divider
+
+AVG mode divides the accumulated INT32 sum by the window area
+(`pool_r * pool_s`) using a 32-cycle serial restoring divider. A sign flag
+preserves the sign of the sum; the unsigned quotient is restored and
+clamped to [-128, 127]. The divider uses registered state so the final
+quotient is available in the register on the first cycle of the write state.
+
+### Memory Ports
+
+| Port | Used | Purpose |
+|------|------|---------|
+| `act_rd` | Yes | Read input elements (window scan) |
+| `out_wr` | Yes | Write output elements |
+| `wt_rd` | No | Tied off |
+| `bias_rd` | No | Tied off |
+
+### FSM States
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> LOAD_CFG : cmd valid
+    LOAD_CFG --> RD : parameters latched
+    RD --> NEXT : out-of-bounds (skip)
+    RD --> WAIT : read issued
+    WAIT --> NEXT : data received
+    NEXT --> RD : more window elements
+    NEXT --> AVG_DIV : window complete (AVG mode)
+    NEXT --> WR : window complete (MAX mode)
+    AVG_DIV --> WR : division complete (32 cycles)
+    WR --> RD : more output elements
+    WR --> DONE : last output element
+    DONE --> IDLE : completion handshake
+```
+
+### Cycle Count
+
+Per output element in MAX mode: approximately `pool_r * pool_s * 3` cycles
+(read + wait + next per window element). Per output element in AVG mode:
+approximately `pool_r * pool_s * 3 + 32` cycles (window scan plus serial
+division). Total for a full operation:
+`OH * OW * C * (pool_r * pool_s * 3 + overhead)` for MAX, or
+`OH * OW * C * (pool_r * pool_s * 3 + 32)` for AVG.
