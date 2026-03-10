@@ -1,5 +1,0 @@
-# smoke.list - Minimal regression for quick sanity checks
-# Format: <level>  (runs the corresponding run_<level>.sh)
-
-unit
-block

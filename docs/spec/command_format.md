@@ -14,7 +14,9 @@ Source of truth: `include/pkg/npu_cmd_pkg.sv`.
 |--------|-------|-------------|
 | `OP_CONV` | `4'h1` | 2-D convolution (INT8 -> INT32 accumulate -> INT8 output) |
 
-All other opcode values are reserved and produce undefined behaviour.
+All other opcode values are reserved. The hardware rejects reserved opcodes
+by raising the error event (`decode_err`) which sets `IRQ_STATUS.PENDING`,
+discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 
 ---
 
@@ -66,12 +68,12 @@ sequenceDiagram
 
 The output spatial dimensions are computed as:
 
-$$
+```math
 \text{out\_h} = \frac{\text{in\_h} + 2 \cdot \text{pad\_h} - \text{filt\_r}}{\text{stride\_h}} + 1
-$$
+```
 
-$$
+```math
 \text{out\_w} = \frac{\text{in\_w} + 2 \cdot \text{pad\_w} - \text{filt\_s}}{\text{stride\_w}} + 1
-$$
+```
 
 The output channel count equals `out_k`.

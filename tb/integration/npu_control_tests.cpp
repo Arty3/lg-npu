@@ -61,6 +61,19 @@ static bool test_bad_opcode(TestResult &r)
         pass = false;
     }
 
+    // Enable IRQ and resubmit bad opcode to verify irq_out pin asserts
+    tb.mmio_write(REG_IRQ_ENABLE, 1);
+    for (int i = 0; i < 16; ++i)
+        tb.mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, 0);
+    tb.mmio_write(REG_DOORBELL, 1);
+    tb.run_clocks(200);
+    if (!tb.raw()->irq)
+    {
+        printf("  [FAIL] bad_opcode: irq_out pin not asserted with IRQ_ENABLE=1\n");
+        pass = false;
+    }
+    tb.mmio_write(REG_IRQ_CLEAR, 1);
+
     if (pass) printf("  [PASS] bad_opcode\n");
     r.record(pass);
     return pass;
@@ -263,6 +276,36 @@ static bool test_hard_reset_clears_state(TestResult &r)
         pass = false;
     }
 
+    // Perf counters: cycles counter ticks every clock, so it will be non-zero
+    // by the time we read it. Active and stall should be zero (no backend work).
+    uint32_t perf_act = tb.mmio_read(REG_PERF_ACTIVE);
+    uint32_t perf_stl = tb.mmio_read(REG_PERF_STALL);
+    if (perf_act != 0 || perf_stl != 0)
+    {
+        printf("  [FAIL] hard_reset_clears_state: perf active/stall not zero "
+               "(act=%u stl=%u)\n", perf_act, perf_stl);
+        pass = false;
+    }
+
+    // IRQ_STATUS should be cleared (no pending interrupt)
+    uint32_t irq_st = tb.mmio_read(REG_IRQ_STATUS);
+    if (irq_st != 0)
+    {
+        printf("  [FAIL] hard_reset_clears_state: IRQ_STATUS not cleared (0x%x)\n", irq_st);
+        pass = false;
+    }
+
+    // STATUS should show idle, not busy, not queue-full
+    uint32_t st2 = tb.read_status();
+    bool qfull = (st2 >> STATUS_QUEUE_FULL_BIT) & 1;
+    bool busy  = (st2 >> STATUS_BUSY_BIT) & 1;
+    if (qfull || busy)
+    {
+        printf("  [FAIL] hard_reset_clears_state: STATUS has busy=%d qfull=%d\n",
+               busy, qfull);
+        pass = false;
+    }
+
     if (pass) printf("  [PASS] hard_reset_clears_state\n");
     r.record(pass);
     return pass;
@@ -398,12 +441,26 @@ static bool test_feature_id(TestResult &r)
     tb.reset();
 
     uint32_t fid = tb.mmio_read(REG_FEATURE_ID);
-    // Feature ID should be non-zero (version major=0, minor=1, etc.)
-    bool pass = (fid != 0);
+    // Expected: VER_MAJ=0x00, VER_MIN=0x01, BACKENDS=1, ROWS=1, COLS=1, DTYPES=1
+    //           = 0x00_01_1_1_1_1 = 0x00011111
+    constexpr uint32_t EXPECTED_FID = 0x00011111;
+    bool pass = (fid == EXPECTED_FID);
     if (!pass)
-        printf("  [FAIL] feature_id: read 0x%08x (expected non-zero)\n", fid);
+    {
+        printf("  [FAIL] feature_id: read 0x%08x (expected 0x%08x)\n", fid, EXPECTED_FID);
+    }
     else
-        printf("  [PASS] feature_id: 0x%08x\n", fid);
+    {
+        // Verify individual fields
+        uint32_t ver_maj  = (fid >> 24) & 0xFF;
+        uint32_t ver_min  = (fid >> 16) & 0xFF;
+        uint32_t backends = (fid >> 12) & 0xF;
+        uint32_t rows     = (fid >>  8) & 0xF;
+        uint32_t cols     = (fid >>  4) & 0xF;
+        uint32_t dtypes   = (fid >>  0) & 0xF;
+        printf("  [PASS] feature_id: 0x%08x (v%u.%u, %u backend(s), %ux%u, dtypes=0x%x)\n",
+               fid, ver_maj, ver_min, backends, rows, cols, dtypes);
+    }
 
     r.record(pass);
     return pass;

@@ -41,8 +41,7 @@ package npu_cmd_pkg;
         logic [4:0]            quant_shift;
     }   conv_cmd_t;
 
-    // Generic command wrapper (opcode + payload)
-    //   Used on the internal cmd_if between decode -> queue -> core.
+    // Generic command wrapper (reserved for future multi-backend dispatch)
     localparam int CMD_PAYLOAD_W = $bits(conv_cmd_t);
 
     typedef struct packed

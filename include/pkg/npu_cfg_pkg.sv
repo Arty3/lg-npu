@@ -28,5 +28,6 @@ package npu_cfg_pkg;
     localparam logic [7:0] NPU_VERSION_MAJOR = 8'd0;
     localparam logic [7:0] NPU_VERSION_MINOR = 8'd1;
     localparam int         NUM_BACKENDS      = 1;
+    localparam logic [3:0] DTYPES_SUPPORTED  = 4'b0001; // bit 0 = INT8
 
 endpackage : npu_cfg_pkg

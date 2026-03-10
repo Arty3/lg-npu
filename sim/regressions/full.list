@@ -1,6 +1,0 @@
-# full.list - Complete regression across all test levels
-# Format: <level>  (runs the corresponding run_<level>.sh)
-
-unit
-block
-integration

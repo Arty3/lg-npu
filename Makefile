@@ -70,18 +70,6 @@ compile-perf-tests: $(SIM_BUILD)
 compile-full-tests: $(SIM_BUILD)
 	$(call build_test,full_tests,tb/integration/npu_full_tests.cpp)
 
-.PHONY: sim-unit
-sim-unit: ## Run unit-level tests
-	bash sim/scripts/run_unit.sh
-
-.PHONY: sim-block
-sim-block: ## Run block-level tests
-	bash sim/scripts/run_block.sh
-
-.PHONY: sim-integration
-sim-integration: ## Run integration tests
-	bash sim/scripts/run_integration.sh
-
 .PHONY: sim-smoke
 sim-smoke: sim-conv-tests sim-control-tests sim-perf-tests ## Run smoke regression (all test suites)
 	@echo ""
@@ -120,10 +108,6 @@ vectors: ## Generate test vectors from Python reference models
 .PHONY: format
 format: ## Run code formatter on RTL and scripts
 	bash tools/format/run_format.sh
-
-.PHONY: check-tree
-check-tree: ## Validate directory structure
-	bash tools/util/check_tree.sh
 
 .PHONY: gen-addrmap
 gen-addrmap: ## Regenerate SV address-map package from spec

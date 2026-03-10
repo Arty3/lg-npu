@@ -31,11 +31,16 @@ static constexpr uint32_t REG_PERF_STALL  = 0x00028;
 static constexpr uint32_t CMD_QUEUE_BASE  = 0x01000;
 static constexpr uint32_t WEIGHT_BUF_BASE = 0x10000;
 static constexpr uint32_t ACT_BUF_BASE    = 0x20000;
+static constexpr uint32_t PSUM_BUF_BASE   = 0x30000;
+
+// CTRL register bits
+static constexpr uint32_t CTRL_SOFT_RESET_BIT = 0;
+static constexpr uint32_t CTRL_ENABLE_BIT     = 1;
 
 // Status register bits
-static constexpr uint32_t STATUS_IDLE_BIT = 0;
-static constexpr uint32_t STATUS_BUSY_BIT = 1;
-static constexpr uint32_t STATUS_QFULL_BIT = 2;
+static constexpr uint32_t STATUS_IDLE_BIT       = 0;
+static constexpr uint32_t STATUS_BUSY_BIT       = 1;
+static constexpr uint32_t STATUS_QUEUE_FULL_BIT = 2;
 
 // Convolution command descriptor (16 words)
 struct ConvDesc
@@ -210,14 +215,14 @@ public:
 
     void enable()
     {
-        mmio_write(REG_CTRL, 0x2);
+        mmio_write(REG_CTRL, 1u << CTRL_ENABLE_BIT);
     }
 
     void soft_reset_pulse()
     {
-        mmio_write(REG_CTRL, 0x1);   // SOFT_RESET=1, ENABLE=0
+        mmio_write(REG_CTRL, 1u << CTRL_SOFT_RESET_BIT);
         for (int i = 0; i < 5; ++i) tick();
-        mmio_write(REG_CTRL, 0x2);   // ENABLE=1, SOFT_RESET=0
+        mmio_write(REG_CTRL, 1u << CTRL_ENABLE_BIT);
     }
 
     uint32_t read_status()
@@ -237,7 +242,7 @@ public:
 
     bool is_queue_full()
     {
-        return (read_status() >> STATUS_QFULL_BIT) & 1;
+        return (read_status() >> STATUS_QUEUE_FULL_BIT) & 1;
     }
 
     // Load a byte array into an SRAM window starting at mmio_base

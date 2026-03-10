@@ -25,46 +25,42 @@ activation buffer.
 ## High-Level Block Diagram
 
 ```mermaid
-block-beta
-    columns 3
+graph TD
+    Host["Host / Testbench"]
 
-    Host["Host / Testbench"]:3
-    space:3
+    Host -- MMIO --> rb
 
-    block:shell:3
-        columns 3
-        shell_label["npu_shell"]:3
+    subgraph shell [npu_shell]
+        rb["npu_reg_block"]
 
-        block:reg_block
-            rb["npu_reg_block"]
-        end
-        space
-        block:cmd_frontend
-            cf["npu_cmd_fetch"]
-            cd["npu_cmd_decode"]
-            q["npu_queue"]
+        subgraph cmd_fe [Command Front-End]
+            cf["npu_cmd_fetch"] --> cd["npu_cmd_decode"] --> q["npu_queue"]
         end
 
-        block:core:3
-            columns 3
-            core_label["npu_core"]:3
-            sched["npu_scheduler"]:3
-            dispatch["npu_dispatch"]:3
-            mem_top["npu_mem_top\n(buffers)"] space:1 conv["conv_backend\n(PE array)"]
-            completion["npu_completion"]:2 irq["npu_irq_ctrl"]
+        rb -- doorbell --> cf
+
+        subgraph core [npu_core]
+            sched["npu_scheduler"]
+            dispatch["npu_dispatch"]
+            mem_top["npu_mem_top (buffers)"]
+            conv["conv_backend (PE array)"]
+            completion["npu_completion"]
         end
+
+        q -- cmd_if --> sched
+        rb -- "config / status" --> sched
+        sched --> dispatch
+        dispatch --> mem_top
+        dispatch --> conv
+        conv <--> mem_top
+        conv --> completion
+        mem_top --> completion
+
+        irq["npu_irq_ctrl"]
+        completion --> irq
     end
 
-    Host -- "MMIO" --> shell_label
-    rb -- "config / status" --> sched
-    q -- "cmd_if" --> sched
-    sched --> dispatch
-    dispatch --> mem_top
-    dispatch --> conv
-    conv --> mem_top
-    mem_top --> completion
-    conv --> completion
-    completion --> irq
+    rb -- "buffer windows" --> mem_top
 ```
 
 ---

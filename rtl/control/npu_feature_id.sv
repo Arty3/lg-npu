@@ -22,7 +22,7 @@ module npu_feature_id
         4'(NUM_BACKENDS),                         // [15:12]
         4'(ARRAY_ROWS),                           // [11:8]
         4'(ARRAY_COLS),                           // [7:4]
-        4'b0001                                   // [3:0] INT8 only
+        DTYPES_SUPPORTED                           // [3:0]
     };
 
 endmodule : npu_feature_id

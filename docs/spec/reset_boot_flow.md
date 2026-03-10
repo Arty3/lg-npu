@@ -11,7 +11,7 @@ The NPU has two reset sources, combined with a logical OR:
 | Source | Trigger | Duration |
 |--------|---------|----------|
 | Hard reset | External `rst_n` pin de-asserted low | Until `rst_n` goes high |
-| Soft reset | Host writes `CTRL[0] = 1` | While `CTRL[0]` is held high |
+| Soft reset | Host writes `CTRL[0] = 1` | Single-cycle pulse (self-clearing) |
 
 ---
 
@@ -43,6 +43,11 @@ rst_out_n = hard_rst_n & ~soft_reset
 
 `rst_out_n` drives all other modules. It is low (active) whenever either
 reset source is active.
+
+Soft reset is **self-clearing**: writing `CTRL[0] = 1` causes `rst_out_n`
+to assert low, which resets `CTRL` to `0` (clearing `CTRL[0]`). The reset
+therefore lasts exactly one cycle. The host does **not** need to explicitly
+clear `CTRL[0]` afterward.
 
 ---
 

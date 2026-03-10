@@ -26,10 +26,10 @@ Source of truth: `include/pkg/npu_addrmap_pkg.sv`.
 |--------|------|-----|-------------|
 | `0x0000` | `CTRL` | RW | Control register |
 | `0x0004` | `STATUS` | RO | Status register |
-| `0x0008` | `DOORBELL` | WO | Write triggers command fetch (value ignored) |
+| `0x0008` | `DOORBELL` | WO | Write triggers command fetch (value ignored, reads 0) |
 | `0x000C` | `IRQ_STATUS` | RO | Interrupt pending flag |
 | `0x0010` | `IRQ_ENABLE` | RW | Interrupt enable mask |
-| `0x0014` | `IRQ_CLEAR` | WO | Write clears pending interrupt |
+| `0x0014` | `IRQ_CLEAR` | WO | Write clears pending interrupt (reads 0) |
 | `0x0018` | `FEATURE_ID` | RO | Hardware feature identification |
 | `0x0020` | `PERF_CYCLES` | RO | Total clock cycles since last clear |
 | `0x0024` | `PERF_ACTIVE` | RO | Backend-active cycles |
@@ -41,7 +41,7 @@ Source of truth: `include/pkg/npu_addrmap_pkg.sv`.
 
 | Bit | Name | Description |
 |-----|------|-------------|
-| 0 | `SOFT_RESET` | Set to 1 to assert software reset; clear to release |
+| 0 | `SOFT_RESET` | Write 1 to trigger a single-cycle reset pulse (self-clearing) |
 | 1 | `ENABLE` | NPU enable (reserved for future gating) |
 | 31:2 | — | Reserved (read-as-zero) |
 
@@ -103,3 +103,5 @@ INT8 buffers only the low byte is significant.
 | Weight | `0x1_0000` | `npu_weight_buffer` | 8-bit |
 | Activation | `0x2_0000` | `npu_act_buffer` | 8-bit |
 | Psum | `0x3_0000` | `npu_psum_buffer` | 32-bit |
+
+Reads from unallocated register offsets return zero.

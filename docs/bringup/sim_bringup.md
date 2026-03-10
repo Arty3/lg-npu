@@ -24,11 +24,11 @@ make lint
 # 2. Generate test vectors
 make vectors
 
-# 3. Run unit tests
-make sim-unit
-
-# 4. Run smoke regression (unit + block)
+# 3. Run smoke regression (conv + control + perf)
 make sim-smoke
+
+# 4. Run full regression (all 196 tests)
+make sim-full
 ```
 
 ---
@@ -39,12 +39,13 @@ make sim-smoke
 |--------|-------------|
 | `make lint` | Verilator lint (`-Wall`) on all RTL via `tools/lint/rtl.f` |
 | `make compile` | Verilate + build C++ model into `sim/build/` |
-| `make sim-unit` | Run all testbenches under `tb/unit/` |
-| `make sim-block` | Run all testbenches under `tb/block/` |
-| `make sim-integration` | Run all testbenches under `tb/integration/` |
-| `make sim-e2e` | Compile and run the end-to-end convolution test (`tb/integration/npu_e2e_harness.cpp`) |
-| `make sim-smoke` | Run `sim/regressions/smoke.list` (unit + block) |
-| `make sim-full` | Run `sim/regressions/full.list` (all levels) |
+| `make sim-e2e` | Compile and run the original E2E convolution test |
+| `make sim-conv-tests` | Run deterministic conv test suite (10 cases) |
+| `make sim-control-tests` | Run control/sequencing test suite (8 cases) |
+| `make sim-perf-tests` | Run performance counter test suite (3 cases) |
+| `make sim-full-tests` | Run full regression suite (175 cases) |
+| `make sim-smoke` | Run conv + control + perf suites (21 tests) |
+| `make sim-full` | Run smoke + full regression (196 tests) |
 | `make vectors` | Generate test vectors from Python reference models |
 | `make waves` | Open the latest VCD waveform in Surfer viewer |
 | `make viz` | Generate architecture diagrams into `docs/diagrams/` |
@@ -69,13 +70,11 @@ flowchart LR
     RUN --> LOG
 ```
 
-Each sim script (`sim/scripts/run_*.sh`) performs these steps:
+Each Makefile test target performs these steps:
 
-1. Discover testbench files in the target directory.
-2. Verilate each testbench against the RTL file list.
-3. Build and run the C++ executable.
-4. Capture output to `sim/results/`.
-5. Report PASS / FAIL based on the exit code.
+1. Verilate the RTL + C++ test harness into a build directory.
+2. Build and run the C++ executable.
+3. Report PASS / FAIL based on the exit code.
 
 ---
 
