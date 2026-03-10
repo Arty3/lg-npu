@@ -53,7 +53,8 @@ typedef enum logic [1:0]
 // Section     (good)
 ```
 - Avoid overusing UTF-8 characters in comments, prefer ASCII.
-- File banners must have a new line in between them and the file contents. 
+- File banners must have a new line in between them and the file contents.
+- When working in sw/ always use the sw/shared/annotations.h header file, use its features as much as possible.
 
 ## Verifications
 
