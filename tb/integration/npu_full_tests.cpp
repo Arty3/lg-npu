@@ -8,6 +8,7 @@
 //   5. Activation function tests
 //   6. GEMM tests
 //   7. Softmax tests
+//   8. Vec tests
 
 #include "npu_tb.h"
 
@@ -609,8 +610,8 @@ static void run_invalid_command_tests(TestResult &r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
-    // 4a: Bad opcodes (0, 4..15)
-    for (int op : {0, 4, 7, 15})
+    // 4a: Bad opcodes (0, 5..15)
+    for (int op : {0, 5, 7, 15})
     {
         NpuTb tb;
         tb.reset();
@@ -1244,6 +1245,129 @@ static void run_softmax_tests(TestResult &r)
     }
 }
 
+// Section 8: Vec (element-wise) tests
+static void run_vec_tests(TestResult &r)
+{
+    printf("\n--- Vec (Element-Wise) Tests ---\n\n");
+
+    // 8a: Single-element ADD
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {10}, b = {20};
+        r.record(tb.run_vec_test("vec add single", a, b, 1, 0));
+    }
+
+    // 8b: Multi-element ADD
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {1, 2, 3, 4}, b = {5, 6, 7, 8};
+        r.record(tb.run_vec_test("vec add 4-elem", a, b, 4, 0));
+    }
+
+    // 8c: ADD saturation positive
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {100, 127}, b = {100, 127};
+        r.record(tb.run_vec_test("vec add sat-pos", a, b, 2, 0));
+    }
+
+    // 8d: ADD saturation negative
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {-100, -128}, b = {-100, -128};
+        r.record(tb.run_vec_test("vec add sat-neg", a, b, 2, 0));
+    }
+
+    // 8e: MUL no shift (small values to avoid overflow)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {3, -2, 5, 0}, b = {4, 7, -3, 10};
+        r.record(tb.run_vec_test("vec mul no-shift", a, b, 4, 1, 0));
+    }
+
+    // 8f: MUL with quant shift
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {50, -60, 70, -80};
+        std::vector<int8_t> b = {40, 30, -20, 10};
+        r.record(tb.run_vec_test("vec mul qshift=7", a, b, 4, 1, 7));
+    }
+
+    // 8g: MUL + ReLU
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {10, -10, 5, -5};
+        std::vector<int8_t> b = {3,   3, -4, -4};
+        r.record(tb.run_vec_test("vec mul relu", a, b, 4, 1, 0, ACT_MODE_RELU));
+    }
+
+    // 8h: MUL + Leaky ReLU
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> a = {10, -10, 5, -5};
+        std::vector<int8_t> b = {3,   3, -4, -4};
+        r.record(tb.run_vec_test("vec mul leaky", a, b, 4, 1, 0, ACT_MODE_LEAKY_RELU));
+    }
+
+    // 8i: Random ADD
+    {
+        std::mt19937 rng(200);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = rand_fill(32, rng);
+        auto b = rand_fill(32, rng);
+        r.record(tb.run_vec_test("vec rand add-32", a, b, 32, 0));
+    }
+
+    // 8j: Random MUL with shift
+    {
+        std::mt19937 rng(201);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        auto a = rand_fill(32, rng);
+        auto b = rand_fill(32, rng);
+        r.record(tb.run_vec_test("vec rand mul-32", a, b, 32, 1, 8));
+    }
+
+    // 8k: Vec then conv on same instance (backend interleave)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // First: vec add 4
+        std::vector<int8_t> va = {1, 2, 3, 4}, vb = {5, 6, 7, 8};
+        bool vec_ok = tb.run_vec_test("vec-then-conv (vec)", va, vb, 4, 0);
+
+        // Second: conv 4x4x1 k3
+        auto ca  = seq_fill(4 * 4, 1);
+        auto cwt = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("vec-then-conv (conv)",
+                                        ca, cwt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        r.record(vec_ok && conv_ok);
+    }
+}
+
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
@@ -1262,6 +1386,7 @@ int main(int argc, char **argv)
     run_activation_tests(r);
     run_gemm_tests(r);
     run_softmax_tests(r);
+    run_vec_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

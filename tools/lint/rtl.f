@@ -58,6 +58,10 @@ rtl/memory/npu_dma_writer.sv
 rtl/memory/npu_dma_frontend.sv
 rtl/memory/npu_scratchpad.sv
 
+// --- Vec backend ------------------------------------------------------------
+rtl/backends/vec/vec_ctrl.sv
+rtl/backends/vec/vec_backend.sv
+
 // --- Softmax backend --------------------------------------------------------
 rtl/backends/softmax/softmax_exp_lut.sv
 rtl/backends/softmax/softmax_ctrl.sv

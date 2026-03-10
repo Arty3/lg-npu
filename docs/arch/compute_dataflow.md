@@ -2,7 +2,8 @@
 
 This document describes the execution model and data movement for the
 lg-npu compute backends: 2D convolution (`rtl/backends/conv/`), general
-matrix multiply (`rtl/backends/gemm/`), and softmax (`rtl/backends/softmax/`).
+matrix multiply (`rtl/backends/gemm/`), softmax (`rtl/backends/softmax/`),
+and element-wise vector operations (`rtl/backends/vec/`).
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -350,7 +351,7 @@ stateDiagram-v2
 ### Backend Muxing
 
 `npu_core` uses a 2-bit registered backend selector (`be_sel_r`) to mux
-memory port signals between the GEMM, softmax, and convolution backends.
+memory port signals between the GEMM, softmax, vec, and convolution backends.
 The selector is set when a command is accepted by the corresponding backend
 and routes all memory request/response signals to the active backend.
 Only one backend is active at a time (in-order scheduler).
@@ -453,3 +454,76 @@ stateDiagram-v2
 Per row: approximately `2 * N + 27 * N` cycles (two pipelined read passes
 plus ~27 cycles per element for the serial normalize pass). Total for a
 full operation: `M * (29 * N + overhead)`.
+
+---
+
+## Vec Dataflow
+
+The vec backend (`rtl/backends/vec/`) performs element-wise operations on
+two input vectors of length N. Source A is read from the activation buffer,
+source B from the weight buffer, and the result is written to the activation
+buffer.
+
+Unlike convolution and GEMM, vec does not use the PE array, accumulator, or
+bias port. It operates directly on the activation and weight buffers
+through a simple FSM that processes one element per ~3 cycles.
+
+### Vec Parameters
+
+| Symbol | Meaning |
+|--------|---------|
+| N | Number of elements (`length`) |
+| vec_op | Sub-operation: 0 = ADD, non-zero = MUL |
+
+### Algorithm
+
+```
+for i in 0 .. N-1:
+  a = act_buffer[a_base + i]     // INT8
+  b = wt_buffer[b_base + i]      // INT8
+  if vec_op == ADD:
+    result = clamp(a + b, -128, 127)   // 9-bit signed -> saturate
+  else:  // MUL
+    acc = a * b                        // INT8 x INT8 -> INT32
+    acc = activate(acc, mode)          // ReLU / None / Leaky ReLU
+    acc = acc >>> quant_shift           // arithmetic right shift
+    result = clamp(acc, -128, 127)     // saturate to INT8
+  act_buffer[out_base + i] = result
+```
+
+### Parallel Read Design
+
+Source A and B reside in separate SRAM banks (activation buffer and weight
+buffer), so read requests are issued simultaneously. Grant-tracking flags
+(`a_gnt_r`, `b_gnt_r`) handle the case where one bank grants before the
+other. Similarly, data-tracking flags (`a_val_r`, `b_val_r`) latch each
+operand as it arrives. The FSM advances to the compute/write state only
+after both operands are valid.
+
+### Memory Ports
+
+| Port | Used | Purpose |
+|------|------|---------|
+| `act_rd` | Yes | Read source A elements |
+| `wt_rd` | Yes | Read source B elements |
+| `out_wr` | Yes | Write output elements |
+| `bias_rd` | No | Tied off |
+
+### FSM States
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> LOAD_CFG : cmd valid
+    LOAD_CFG --> READ : parameters latched
+    READ --> WAIT : both grants received
+    WAIT --> WRITE : both data valid
+    WRITE --> READ : more elements
+    WRITE --> DONE : last element written
+    DONE --> IDLE : completion handshake
+```
+
+### Cycle Count
+
+Each element takes approximately 3 cycles (read + wait + write), so the
+total cycle count is approximately `3 * N + pipeline overhead`.

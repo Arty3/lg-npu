@@ -9,9 +9,9 @@ as possible:
 | Aspect | Decision |
 |--------|----------|
 | Data type | INT8 (signed 8-bit) exclusively. Weights, activations, and biases are all INT8; the MAC array accumulates into INT32, and a post-processing quantize step converts the result back to INT8. |
-| Compute | 2D convolution, general matrix multiply (GEMM), and softmax. No pooling or element-wise operations. |
+| Compute | 2D convolution, general matrix multiply (GEMM), softmax, and element-wise vector operations (ADD, MUL). No pooling. |
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
-| Command interface | Three opcodes (`CONV`, `GEMM`, `SOFTMAX`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, or softmax operation. |
+| Command interface | Four opcodes (`CONV`, `GEMM`, `SOFTMAX`, `VEC`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, softmax, or vector operation. |
 | Memory | Local on-chip SRAM only (weight buffer, activation buffer, partial-sum buffer). No external DRAM path; no DMA transfers. Software pre-loads buffers before issuing the command. |
 | Platform | Simulation-only. No FPGA or ASIC bring-up. |
 
@@ -53,12 +53,15 @@ graph TD
         sched --> dispatch
         dispatch -- "OP_GEMM" --> gemm
         dispatch -- "OP_SOFTMAX" --> smax["softmax_backend"]
+        dispatch -- "OP_VEC" --> vec["vec_backend"]
         dispatch -- "OP_CONV" --> conv
         gemm <--> mem_top
         smax <--> mem_top
+        vec <--> mem_top
         conv <--> mem_top
         gemm --> completion
         smax --> completion
+        vec --> completion
         conv --> completion
         mem_top --> completion
 

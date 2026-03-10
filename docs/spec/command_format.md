@@ -15,12 +15,13 @@ Source of truth: `include/pkg/npu_cmd_pkg.sv`.
 | `OP_CONV` | `4'h1` | 2-D convolution (INT8 -> INT32 accumulate -> INT8 output) |
 | `OP_GEMM` | `4'h2` | General matrix multiply (INT8 -> INT32 accumulate -> INT8 output) |
 | `OP_SOFTMAX` | `4'h3` | Row-wise softmax (INT8 -> INT8 output in [0, 127]) |
+| `OP_VEC` | `4'h4` | Element-wise vector operation (ADD or MUL, INT8 -> INT8) |
 
 All other opcode values are reserved. The hardware rejects reserved opcodes
 by raising the error event (`decode_err`) which sets `IRQ_STATUS.PENDING`,
 discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 
-Dispatch priority: GEMM > Softmax > Convolution.
+Dispatch priority: GEMM > Softmax > Vec > Convolution.
 
 ---
 
@@ -94,6 +95,34 @@ approximated exponentials in the row. Output values are INT8 in [0, 127].
 
 The weight buffer and bias port are not used by softmax.
 
+### Vec (`OP_VEC`)
+
+Vec performs element-wise operations on two input vectors of length N.
+Source A is read from the activation buffer, source B from the weight buffer,
+and the result is written to the activation buffer.
+
+| Word | Field (Vec alias) | Width | Description |
+|------|-------------------|-------|-------------|
+| 0 | `opcode` | 4 bits (LSBs) | `4'h4` |
+| 1 | `a_addr` | 16 bits | Source A base address (activation buffer) |
+| 2 | `out_addr` | 16 bits | Output base address (activation buffer) |
+| 3 | `b_addr` | 16 bits | Source B base address (weight buffer) |
+| 4 | reserved | - | Must be zero |
+| 5 | `length` (N) | 16 bits | Number of elements |
+| 6 | `vec_op` | 16 bits | Sub-operation: 0 = ADD, non-zero = MUL |
+| 7-14 | reserved | - | Must be zero |
+| 15 | `quant_shift` | 5 bits (bits [4:0]) | Right-shift for MUL quantisation (ignored for ADD) |
+| 15 | `act_mode` | 2 bits (bits [6:5]) | Activation for MUL: 0 = None, 1 = ReLU, 2 = Leaky ReLU (ignored for ADD) |
+
+**ADD** (`vec_op = 0`): `C[i] = clamp(A[i] + B[i], -128, 127)`. Saturating
+INT8 addition with no activation or quantisation.
+
+**MUL** (`vec_op != 0`): `C[i] = quantize(activate(A[i] * B[i], mode), shift)`.
+INT8 x INT8 -> INT32 product, then activation function, then arithmetic
+right-shift, then saturation to [-128, 127].
+
+The bias port is not used by vec.
+
 ---
 
 ## Processing Flow
@@ -113,6 +142,8 @@ sequenceDiagram
         NPU->>NPU: gemm_backend executes matrix multiply
     else OP_SOFTMAX
         NPU->>NPU: softmax_backend executes row-wise softmax
+    else OP_VEC
+        NPU->>NPU: vec_backend executes element-wise operation
     end
     NPU-->>Host: Assert IRQ (if enabled)
     Host->>NPU: Read IRQ_STATUS, write IRQ_CLEAR

@@ -128,6 +128,31 @@ struct SoftmaxDesc
     }
 };
 
+// Vec command descriptor (16 words, same transport as ConvDesc)
+struct VecDesc
+{
+    uint32_t opcode      = 4;  // OP_VEC
+    uint32_t a_addr      = 0;  // Source A base (activation buffer)
+    uint32_t out_addr    = 0;  // Output base (activation buffer)
+    uint32_t b_addr      = 0;  // Source B base (weight buffer)
+    uint32_t length      = 0;  // Number of elements
+    uint32_t vec_op      = 0;  // 0=ADD, 1=MUL
+    uint32_t quant_shift = 0;
+    uint32_t act_mode    = 0;
+
+    void to_words(uint32_t out[16]) const
+    {
+        std::memset(out, 0, sizeof(uint32_t) * 16);
+        out[0]  = opcode;
+        out[1]  = a_addr;
+        out[2]  = out_addr;
+        out[3]  = b_addr;
+        out[5]  = length;
+        out[6]  = vec_op;
+        out[15] = (quant_shift & 0x1F) | ((act_mode & 0x3) << 5);
+    }
+};
+
 // Activation mode constants (match act_mode_e in npu_types_pkg.sv)
 static constexpr uint32_t ACT_MODE_NONE       = 0;
 static constexpr uint32_t ACT_MODE_RELU       = 1;
@@ -290,6 +315,47 @@ inline std::vector<int8_t> ref_softmax(
             uint8_t quot = static_cast<uint8_t>(numer / sum);
             if (quot > 127) quot = 127;
             out[base + i] = static_cast<int8_t>(quot);
+        }
+    }
+    return out;
+}
+
+// C++ reference vec: element-wise ADD or MUL (INT8 in -> INT8 out)
+//   vec_op=0: C[i] = clamp(A[i] + B[i], -128, 127)
+//   vec_op!=0: C[i] = quantize(activate(A[i]*B[i], mode), shift)
+inline std::vector<int8_t> ref_vec(
+    const std::vector<int8_t> &a,
+    const std::vector<int8_t> &b,
+    int length,
+    uint32_t vec_op,
+    int quant_shift = 0,
+    uint32_t act_mode = ACT_MODE_NONE)
+{
+    std::vector<int8_t> out(length);
+    for (int i = 0; i < length; ++i)
+    {
+        if (vec_op == 0)
+        {
+            int32_t sum = static_cast<int32_t>(a[i]) + static_cast<int32_t>(b[i]);
+            if (sum > 127) sum = 127;
+            if (sum < -128) sum = -128;
+            out[i] = static_cast<int8_t>(sum);
+        }
+        else
+        {
+            int32_t acc = static_cast<int32_t>(a[i]) * static_cast<int32_t>(b[i]);
+            if (act_mode == ACT_MODE_RELU)
+            {
+                if (acc < 0) acc = 0;
+            }
+            else if (act_mode == ACT_MODE_LEAKY_RELU)
+            {
+                if (acc < 0) acc >>= LEAKY_SHIFT;
+            }
+            acc >>= quant_shift;
+            if (acc > 127) acc = 127;
+            if (acc < -128) acc = -128;
+            out[i] = static_cast<int8_t>(acc);
         }
     }
     return out;
@@ -462,6 +528,17 @@ public:
 
     // Submit a softmax command and ring the doorbell
     void submit_softmax(const SoftmaxDesc &desc)
+    {
+        uint32_t words[16];
+        desc.to_words(words);
+        for (int i = 0; i < 16; ++i)
+            mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+        mmio_write(REG_DOORBELL, 1);
+        run_clocks(2000);
+    }
+
+    // Submit a vec command and ring the doorbell
+    void submit_vec(const VecDesc &desc)
     {
         uint32_t words[16];
         desc.to_words(words);
@@ -664,6 +741,57 @@ public:
         desc.num_rows = static_cast<uint32_t>(num_rows);
         desc.row_len  = static_cast<uint32_t>(row_len);
         submit_softmax(desc);
+
+        if (!wait_idle())
+        {
+            printf("  [FAIL] %s: TIMEOUT waiting for idle\n", name);
+            return false;
+        }
+
+        auto got = read_bytes(ACT_BUF_BASE + out_addr, out_size);
+        bool pass = true;
+        for (int i = 0; i < out_size; ++i)
+        {
+            if (got[i] != expected[i])
+            {
+                printf("  [FAIL] %s: output[%d] expected %d, got %d\n",
+                       name, i, expected[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // Run a vec op end-to-end: load data, fire command, wait, read back.
+    bool run_vec_test(
+        const char *name,
+        const std::vector<int8_t> &a,
+        const std::vector<int8_t> &b,
+        int length,
+        uint32_t vec_op,
+        int qshift            = 0,
+        uint32_t act_mode     = ACT_MODE_NONE,
+        uint32_t a_addr       = 0,
+        uint32_t b_addr       = 0,
+        uint32_t out_addr     = 2048)
+    {
+        auto expected = ref_vec(a, b, length, vec_op, qshift, act_mode);
+        int out_size = static_cast<int>(expected.size());
+
+        load_bytes(ACT_BUF_BASE + a_addr, a);
+        load_bytes(WEIGHT_BUF_BASE + b_addr, b);
+
+        VecDesc desc{};
+        desc.a_addr      = a_addr;
+        desc.out_addr    = out_addr;
+        desc.b_addr      = b_addr;
+        desc.length      = static_cast<uint32_t>(length);
+        desc.vec_op      = vec_op;
+        desc.quant_shift = static_cast<uint32_t>(qshift);
+        desc.act_mode    = act_mode;
+        submit_vec(desc);
 
         if (!wait_idle())
         {
