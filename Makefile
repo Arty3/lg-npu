@@ -4,7 +4,6 @@ REPO_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 FILELIST  := tools/lint/rtl.f
 TOP       := npu_shell
 SIM_BUILD := sim/build
-SIM_OUT   := sim/results
 VEC_DIR   := tb/vectors
 WAVE_DIR  := sim/waves
 
@@ -34,9 +33,6 @@ lint: ## Run Verilator lint on all RTL
 
 $(SIM_BUILD):
 	mkdir -p $(SIM_BUILD)
-
-$(SIM_OUT):
-	mkdir -p $(SIM_OUT)
 
 $(WAVE_DIR):
 	mkdir -p $(WAVE_DIR)
@@ -76,23 +72,23 @@ sim-smoke: sim-conv-tests sim-control-tests sim-perf-tests ## Run smoke regressi
 	@echo "=== sim-smoke: ALL SUITES PASSED ==="
 
 .PHONY: sim-e2e
-sim-e2e: compile $(SIM_OUT) $(WAVE_DIR) ## Run original end-to-end convolution test
+sim-e2e: compile $(WAVE_DIR) ## Run original end-to-end convolution test
 	$(SIM_BUILD)/e2e/V$(TOP)
 
 .PHONY: sim-conv-tests
-sim-conv-tests: compile-conv-tests $(SIM_OUT) $(WAVE_DIR) ## Run deterministic conv test suite (10 cases)
+sim-conv-tests: compile-conv-tests $(WAVE_DIR) ## Run deterministic conv test suite (10 cases)
 	$(SIM_BUILD)/conv_tests/V$(TOP)
 
 .PHONY: sim-control-tests
-sim-control-tests: compile-control-tests $(SIM_OUT) $(WAVE_DIR) ## Run control/sequencing test suite
+sim-control-tests: compile-control-tests $(WAVE_DIR) ## Run control/sequencing test suite
 	$(SIM_BUILD)/control_tests/V$(TOP)
 
 .PHONY: sim-perf-tests
-sim-perf-tests: compile-perf-tests $(SIM_OUT) $(WAVE_DIR) ## Run performance counter test suite
+sim-perf-tests: compile-perf-tests $(WAVE_DIR) ## Run performance counter test suite
 	$(SIM_BUILD)/perf_tests/V$(TOP)
 
 .PHONY: sim-full-tests
-sim-full-tests: compile-full-tests $(SIM_OUT) $(WAVE_DIR) ## Run full regression test suite
+sim-full-tests: compile-full-tests $(WAVE_DIR) ## Run full regression test suite
 	$(SIM_BUILD)/full_tests/V$(TOP)
 
 .PHONY: sim-full
@@ -132,7 +128,7 @@ waves: ## Open latest waveform in Surfer viewer
 
 .PHONY: clean
 clean: ## Remove all build artifacts
-	rm -rf $(SIM_BUILD) $(SIM_OUT) obj_dir
+	rm -rf $(SIM_BUILD) obj_dir
 	rm -f sim/waves/*.vcd sim/waves/*.fst
 
 .PHONY: clean-all

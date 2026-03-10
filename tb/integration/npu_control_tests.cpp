@@ -24,7 +24,7 @@ static bool run_small_conv(NpuTb &tb, const char *label)
 static bool test_bad_opcode(TestResult &r)
 {
     printf("[test] bad_opcode\n");
-    NpuTb tb;
+    NpuTb tb("sim/waves/control_tests.vcd");
     tb.reset();
     tb.enable();
 

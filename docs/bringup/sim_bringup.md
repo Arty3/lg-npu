@@ -61,13 +61,13 @@ flowchart LR
     VER["Verilator"]
     CPP["C++ Model\n(sim/build/)"]
     RUN["Execute"]
-    LOG["Results\n(sim/results/)"]
+    WAVE["Waveforms\n(sim/waves/)"]
 
     RTL --> VER
     TB --> VER
     VER --> CPP
     CPP --> RUN
-    RUN --> LOG
+    RUN --> WAVE
 ```
 
 Each Makefile test target performs these steps:

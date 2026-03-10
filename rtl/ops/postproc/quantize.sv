@@ -1,8 +1,8 @@
 // ============================================================================
-// conv_quantize.sv - INT32 -> INT8 requantization (right-shift + saturate)
+// quantize.sv - INT32 -> INT8 requantization (right-shift + saturate)
 // ============================================================================
 
-module conv_quantize
+module quantize
     import npu_types_pkg::*;
 (
     input  logic                       clk,
@@ -47,4 +47,4 @@ module conv_quantize
         .out_ready (out_ready)
     );
 
-endmodule : conv_quantize
+endmodule : quantize

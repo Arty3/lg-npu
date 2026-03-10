@@ -66,7 +66,7 @@ static PerfSnapshot run_and_measure(NpuTb &tb,
 static bool test_perf_counters_increment(TestResult &r)
 {
     printf("[test] perf_counters_increment\n");
-    NpuTb tb;
+    NpuTb tb("sim/waves/perf_tests.vcd");
     tb.reset();
     tb.enable();
 

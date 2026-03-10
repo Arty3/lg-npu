@@ -28,7 +28,6 @@ temp/
 sim/build/
 sim/work/
 sim/out/
-sim/results/
 sim/waves/
 *.vcd
 *.fst

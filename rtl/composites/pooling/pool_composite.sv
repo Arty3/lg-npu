@@ -1,10 +1,10 @@
 // ============================================================================
-// lnorm_backend.sv - Top-level LayerNorm backend
-//   Connects lnorm_ctrl.  Does not use weight buffer or bias ports
+// pool_composite.sv - Top-level pooling composite
+//   Connects pool_ctrl.  Does not use weight buffer or bias ports
 //   (all tied off).
 // ============================================================================
 
-module lnorm_backend
+module pool_composite
     import npu_types_pkg::*;
     import npu_cmd_pkg::*;
 (
@@ -58,7 +58,7 @@ module lnorm_backend
     assign bias_rd_addr = '0;
     assign bias_rd_req  = 1'b0;
 
-    lnorm_ctrl u_ctrl (
+    pool_ctrl u_ctrl (
         .clk           (clk),
         .rst_n         (rst_n),
         .cmd           (cmd),
@@ -77,4 +77,4 @@ module lnorm_backend
         .busy          (busy)
     );
 
-endmodule : lnorm_backend
+endmodule : pool_composite

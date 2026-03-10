@@ -210,13 +210,13 @@ sequenceDiagram
     else OP_GEMM
         NPU->>NPU: gemm_backend executes matrix multiply
     else OP_SOFTMAX
-        NPU->>NPU: softmax_backend executes row-wise softmax
+        NPU->>NPU: softmax_composite executes row-wise softmax
     else OP_VEC
         NPU->>NPU: vec_backend executes element-wise operation
     else OP_LNORM
-        NPU->>NPU: lnorm_backend executes row-wise layer norm
+        NPU->>NPU: lnorm_composite executes row-wise layer norm
     else OP_POOL
-        NPU->>NPU: pool_backend executes spatial pooling
+        NPU->>NPU: pool_composite executes spatial pooling
     end
     NPU-->>Host: Assert IRQ (if enabled)
     Host->>NPU: Read IRQ_STATUS, write IRQ_CLEAR

@@ -58,22 +58,28 @@ rtl/memory/npu_dma_writer.sv
 rtl/memory/npu_dma_frontend.sv
 rtl/memory/npu_scratchpad.sv
 
+// --- Ops: reusable primitives -----------------------------------------------
+rtl/ops/postproc/bias_add.sv
+rtl/ops/activation/activation.sv
+rtl/ops/postproc/quantize.sv
+rtl/ops/postproc/postproc.sv
+
 // --- Vec backend ------------------------------------------------------------
 rtl/backends/vec/vec_ctrl.sv
 rtl/backends/vec/vec_backend.sv
 
-// --- Pooling backend --------------------------------------------------------
-rtl/backends/pool/pool_ctrl.sv
-rtl/backends/pool/pool_backend.sv
+// --- Composites: pooling ----------------------------------------------------
+rtl/composites/pooling/pool_ctrl.sv
+rtl/composites/pooling/pool_composite.sv
 
-// --- LayerNorm backend ------------------------------------------------------
-rtl/backends/lnorm/lnorm_ctrl.sv
-rtl/backends/lnorm/lnorm_backend.sv
+// --- Composites: lnorm ------------------------------------------------------
+rtl/composites/lnorm/lnorm_ctrl.sv
+rtl/composites/lnorm/lnorm_composite.sv
 
-// --- Softmax backend --------------------------------------------------------
-rtl/backends/softmax/softmax_exp_lut.sv
-rtl/backends/softmax/softmax_ctrl.sv
-rtl/backends/softmax/softmax_backend.sv
+// --- Composites: softmax ----------------------------------------------------
+rtl/composites/softmax/softmax_exp_lut.sv
+rtl/composites/softmax/softmax_ctrl.sv
+rtl/composites/softmax/softmax_composite.sv
 
 // --- GEMM backend -----------------------------------------------------------
 rtl/backends/gemm/gemm_addr_gen.sv
@@ -84,10 +90,6 @@ rtl/backends/gemm/gemm_backend.sv
 rtl/backends/conv/conv_pe.sv
 rtl/backends/conv/conv_array.sv
 rtl/backends/conv/conv_accum.sv
-rtl/backends/conv/conv_bias.sv
-rtl/backends/conv/conv_activation.sv
-rtl/backends/conv/conv_quantize.sv
-rtl/backends/conv/conv_postproc.sv
 rtl/backends/conv/conv_addr_gen.sv
 rtl/backends/conv/conv_loader.sv
 rtl/backends/conv/conv_line_buffer.sv

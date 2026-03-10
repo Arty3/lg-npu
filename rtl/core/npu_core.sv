@@ -159,7 +159,7 @@ module npu_core
     logic              smax_bias_req;
     logic              smax_done, smax_busy;
 
-    softmax_backend u_softmax (
+    softmax_composite u_softmax (
         .clk            (clk),
         .rst_n          (rst_n),
         .cmd            (smax_be_cmd),
@@ -270,7 +270,7 @@ module npu_core
     logic              lnorm_bias_req;
     logic              lnorm_done, lnorm_busy;
 
-    lnorm_backend u_lnorm (
+    lnorm_composite u_lnorm (
         .clk            (clk),
         .rst_n          (rst_n),
         .cmd            (lnorm_be_cmd),
@@ -307,7 +307,7 @@ module npu_core
     logic              pool_bias_req;
     logic              pool_done, pool_busy;
 
-    pool_backend u_pool (
+    pool_composite u_pool (
         .clk            (clk),
         .rst_n          (rst_n),
         .cmd            (pool_be_cmd),

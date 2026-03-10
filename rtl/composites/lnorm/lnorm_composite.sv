@@ -1,10 +1,10 @@
 // ============================================================================
-// softmax_backend.sv - Top-level softmax backend
-//   Connects softmax_ctrl with softmax_exp_lut.  Does not use
-//   weight buffer or bias ports (tied off).
+// lnorm_composite.sv - Top-level LayerNorm composite
+//   Connects lnorm_ctrl.  Does not use weight buffer or bias ports
+//   (all tied off).
 // ============================================================================
 
-module softmax_backend
+module lnorm_composite
     import npu_types_pkg::*;
     import npu_cmd_pkg::*;
 (
@@ -58,16 +58,7 @@ module softmax_backend
     assign bias_rd_addr = '0;
     assign bias_rd_req  = 1'b0;
 
-    // Exp LUT wiring
-    logic [7:0]  lut_diff;
-    logic [15:0] lut_exp_val;
-
-    softmax_exp_lut u_lut (
-        .diff    (lut_diff),
-        .exp_val (lut_exp_val)
-    );
-
-    softmax_ctrl u_ctrl (
+    lnorm_ctrl u_ctrl (
         .clk           (clk),
         .rst_n         (rst_n),
         .cmd           (cmd),
@@ -82,10 +73,8 @@ module softmax_backend
         .out_wr_data   (out_wr_data),
         .out_wr_req    (out_wr_req),
         .out_wr_gnt    (out_wr_gnt),
-        .lut_diff      (lut_diff),
-        .lut_exp_val   (lut_exp_val),
         .done          (done),
         .busy          (busy)
     );
 
-endmodule : softmax_backend
+endmodule : lnorm_composite

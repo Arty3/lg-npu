@@ -7,7 +7,6 @@ package npu_addrmap_pkg;
 
     import npu_types_pkg::*;
 
-
     // Register offsets (MMIO byte addresses)
     localparam logic [MMIO_ADDR_W-1:0] REG_CTRL         = 20'h0_0000;
     localparam logic [MMIO_ADDR_W-1:0] REG_STATUS       = 20'h0_0004;

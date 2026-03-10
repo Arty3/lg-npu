@@ -52,10 +52,10 @@ graph TD
         rb -- "config / status" --> sched
         sched --> dispatch
         dispatch -- "OP_GEMM" --> gemm
-        dispatch -- "OP_SOFTMAX" --> smax["softmax_backend"]
+        dispatch -- "OP_SOFTMAX" --> smax["softmax_composite"]
         dispatch -- "OP_VEC" --> vec["vec_backend"]
-        dispatch -- "OP_LNORM" --> lnorm["lnorm_backend"]
-        dispatch -- "OP_POOL" --> pool["pool_backend"]
+        dispatch -- "OP_LNORM" --> lnorm["lnorm_composite"]
+        dispatch -- "OP_POOL" --> pool["pool_composite"]
         dispatch -- "OP_CONV" --> conv
         gemm <--> mem_top
         smax <--> mem_top
@@ -112,8 +112,8 @@ Memory-mapped control/status register file. Provides:
 | `npu_cmd_decode` | Validates the opcode and extracts fields into an internal command struct. Exposes a `busy` output so the pipeline knows a decode is in flight. |
 | `npu_queue` | Shallow FIFO (depth configurable, default 4) that holds decoded commands until the core is ready. |
 
-Three opcodes are defined: `CONV`, `GEMM`, and `SOFTMAX`. All share the
-same 16-word descriptor layout. See
+Six opcodes are defined: `CONV`, `GEMM`, `SOFTMAX`, `VEC`, `LNORM`, and
+`POOL`. All share the same 16-word descriptor layout. See
 [command_format.md](../spec/command_format.md) for the full layout.
 
 ### Core (`rtl/core/npu_core.sv`)
@@ -152,7 +152,7 @@ DMA and compute are mutually exclusive; DMA busy feeds into `npu_status`.
 ### Convolution Backend (`rtl/backends/conv/`)
 
 The convolution compute engine. Described in detail in
-[conv_dataflow.md](conv_dataflow.md).
+[compute_dataflow.md](compute_dataflow.md).
 
 | Module | Role |
 |--------|------|
@@ -165,10 +165,6 @@ The convolution compute engine. Described in detail in
 | `conv_array` | Systolic or spatial array of processing elements. |
 | `conv_pe` | Single processing element: INT8xINT8 multiply, INT32 accumulate. |
 | `conv_accum` | Accumulation register file for partial sums across input channels. |
-| `conv_bias` | Adds an INT8 bias (sign-extended to INT32) to the accumulated result. |
-| `conv_activation` | Configurable activation: ReLU (default), None, or Leaky ReLU (alpha = 1/8). |
-| `conv_quantize` | Requantizes the INT32 accumulator back to INT8 (shift + saturate). |
-| `conv_postproc` | Chains bias -> activation -> quantize into a single post-processing pipeline stage. |
 | `conv_writer` | Writes the final INT8 output tile back into the activation buffer. |
 
 ### GEMM Backend (`rtl/backends/gemm/`)
@@ -176,7 +172,7 @@ The convolution compute engine. Described in detail in
 General matrix multiply engine. Reuses the convolution PE array,
 accumulator, post-processing chain, loader, and writer via a GEMM-specific
 control and address generation front-end. Described in detail in
-[conv_dataflow.md](conv_dataflow.md#gemm-dataflow).
+[compute_dataflow.md](compute_dataflow.md#gemm-dataflow).
 
 | Module | Role |
 |--------|------|
@@ -184,18 +180,30 @@ control and address generation front-end. Described in detail in
 | `gemm_ctrl` | 3-deep loop sequencer FSM (m, n, k). |
 | `gemm_addr_gen` | Computes row-major addresses for A\[m,k\] and B\[k,n\]. |
 
-Shared modules (`conv_loader`, `conv_array`, `conv_accum`, `conv_postproc`,
-`conv_writer`) are reused from the convolution backend. The loader runs
-with zero-padding disabled.
+Shared modules (`conv_loader`, `conv_array`, `conv_accum`, `postproc`,
+`conv_writer`) are reused from the convolution backend and ops. The loader
+runs with zero-padding disabled.
 
-### Softmax Backend (`rtl/backends/softmax/`)
+### Reusable Ops (`rtl/ops/`)
+
+Primitive operations shared across backends. All use a valid/ready stream
+interface.
+
+| Module | Path | Role |
+|--------|------|------|
+| `bias_add` | `ops/postproc/` | Adds sign-extended INT8 bias to INT32 accumulator. |
+| `activation` | `ops/activation/` | Configurable activation on INT32: ReLU, None, or Leaky ReLU (alpha = 1/8). |
+| `quantize` | `ops/postproc/` | INT32 -> INT8 requantization (arithmetic right-shift + saturate). |
+| `postproc` | `ops/postproc/` | Chains bias_add -> activation -> quantize into a single pipeline stage. |
+
+### Softmax Composite (`rtl/composites/softmax/`)
 
 Row-wise softmax engine using a multi-pass algorithm over local SRAM.
 Does not use the weight buffer or PE array.
 
 | Module | Role |
 |--------|------|
-| `softmax_backend` | Top-level backend wrapper. Ties off unused weight/bias ports. |
+| `softmax_composite` | Top-level composite wrapper. Ties off unused weight/bias ports. |
 | `softmax_ctrl` | Multi-pass FSM: FIND_MAX -> EXP_SUM -> NORMALIZE (per-element serial divider). |
 | `softmax_exp_lut` | Combinational exp(-d/32) approximation via two small ROM tables (8-entry integer + 32-entry fractional). |
 
@@ -215,18 +223,28 @@ or bias port.
 Described in detail in
 [compute_dataflow.md](compute_dataflow.md#vec-dataflow).
 
-### LayerNorm Backend (`rtl/backends/lnorm/`)
+### LayerNorm Composite (`rtl/composites/lnorm/`)
 
 Row-wise layer normalisation engine using a multi-pass algorithm over local
 SRAM. Does not use the weight buffer, PE array, or bias port.
 
 | Module | Role |
 |--------|------|
-| `lnorm_backend` | Top-level backend wrapper. Ties off unused weight/bias ports. |
+| `lnorm_composite` | Top-level composite wrapper. Ties off unused weight/bias ports. |
 | `lnorm_ctrl` | Multi-pass FSM: SUM -> MEAN_DIV -> VAR -> VAR_DIV -> SQRT -> NORMALIZE (per-element serial divider). |
 
 Described in detail in
 [compute_dataflow.md](compute_dataflow.md#layernorm-dataflow).
+
+### Pooling Composite (`rtl/composites/pooling/`)
+
+2D spatial pooling engine (MAX and AVG). Does not use the weight buffer,
+PE array, or bias port.
+
+| Module | Role |
+|--------|------|
+| `pool_composite` | Top-level composite wrapper. Ties off unused weight/bias ports. |
+| `pool_ctrl` | 5-deep loop FSM with restoring divider for AVG mode. |
 
 ### Interrupt & Reset (`rtl/control/`)
 

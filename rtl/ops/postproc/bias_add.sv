@@ -1,46 +1,34 @@
 // ============================================================================
-// conv_activation.sv - Configurable activation on INT32
-//   ACT_RELU (default): max(0, x)
-//   ACT_NONE:           passthrough
-//   ACT_LEAKY_RELU:     x >= 0 ? x : x >>> LEAKY_SHIFT
+// bias_add.sv - Add sign-extended INT8 bias to INT32 accumulator
 // ============================================================================
 
-module conv_activation
+module bias_add
     import npu_types_pkg::*;
 (
     input  logic                       clk,
     input  logic                       rst_n,
 
-    // Configuration
-    input  act_mode_e                  act_mode,
+    // Bias value (INT8, sign-extended to ACC_W by this module)
+    input  logic signed [DATA_W-1:0]   bias_val,
 
-    // Stream in  (INT32)
+    // Stream in  (INT32 accumulator)
     input  logic signed [ACC_W-1:0]    in_data,
     input  logic                       in_valid,
     output logic                       in_ready,
 
-    // Stream out (INT32, activation applied)
+    // Stream out (INT32 with bias added)
     output logic signed [ACC_W-1:0]    out_data,
     output logic                       out_valid,
     input  logic                       out_ready
 );
 
-    logic signed [ACC_W-1:0] activated;
-
-    always_comb begin
-        case (act_mode)
-            ACT_NONE:       activated = in_data;
-            ACT_LEAKY_RELU: activated = (in_data < 0)
-                                        ? (in_data >>> LEAKY_SHIFT)
-                                        : in_data;
-            default:        activated = (in_data < 0) ? '0 : in_data;
-        endcase
-    end
+    logic signed [ACC_W-1:0] biased;
+    assign biased = in_data + ACC_W'(bias_val);
 
     pipeline_reg #(.DATA_W(ACC_W)) u_reg (
         .clk       (clk),
         .rst_n     (rst_n),
-        .in_data   (activated),
+        .in_data   (biased),
         .in_valid  (in_valid),
         .in_ready  (in_ready),
         .out_data  (out_data),
@@ -48,4 +36,4 @@ module conv_activation
         .out_ready (out_ready)
     );
 
-endmodule : conv_activation
+endmodule : bias_add

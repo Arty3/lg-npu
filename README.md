@@ -9,11 +9,11 @@ The project aims to design a modular neural processing unit that can be
 implemented on FPGA for development and validation, with a long-term goal of
 supporting ASIC implementation.
 
-The architecture focuses initially on efficient convolution workloads and
+The architecture supports six compute kernels and
 is designed around a clear separation between:
 
 - a software-controlled execution model
-- a modular compute backend
+- modular compute backends and composites
 - a shared memory and data movement infrastructure
 
 The project is structured to support full hardware/software co-design,
@@ -25,10 +25,9 @@ including:
 - a software runtime and driver interface
 - FPGA and ASIC integration flows
 
-The initial development target is a convolution-first accelerator with
-INT8 inference support, designed to execute small CNN workloads efficiently
-while remaining extensible for future compute backends such as GEMM or
-attention engines.
+The accelerator targets INT8 inference, supporting convolution, general
+matrix multiply (GEMM), softmax, element-wise vector operations, layer
+normalisation, and 2D spatial pooling.
 
 ---
 
@@ -48,11 +47,9 @@ components interact.
 | File | Description |
 |-----|-------------|
 | `overview.md` | High-level overview of the lg-npu architecture and design goals. |
-| `conv_dataflow.md` | Description of the convolution execution model and dataflow through the compute array. |
+| `compute_dataflow.md` | Description of the compute execution model and dataflow through backends and composites. |
 | `memory_hierarchy.md` | Overview of the on-chip memory system, buffers, and data movement strategy. |
 | `programming_model.md` | Conceptual model for how software interacts with the NPU (commands, execution flow, completion). |
-| `fpga_plan.md` | FPGA bring-up strategy and expected integration architecture. |
-| `asic_plan.md` | Long-term plan for ASIC synthesis, layout, and physical design considerations. |
 
 ---
 
@@ -117,18 +114,14 @@ Run `make help` to list all targets. The most common ones:
 ```bash
 make lint              # Verilator lint (zero-warning gate)
 make compile           # Verilate -> C++ model
-make sim-unit          # Run unit-level testbenches
-make sim-block         # Run block-level testbenches
-make sim-integration   # Run integration testbenches
-make sim-e2e           # End-to-end convolution test (compile + run)
-make sim-smoke         # Smoke regression (unit + block)
-make sim-full          # Full regression (all levels)
+make compile-full-tests # Build full regression binary
+make sim-smoke         # Smoke regression (conv + control + perf)
+make sim-full          # Full regression (all test suites)
 make vectors           # Generate test vectors from Python models
 make format            # Auto-format SV / shell / Python
 make gen               # Regenerate SV packages + C headers
 make viz               # Generate architecture diagrams
 make waves             # Open latest waveform in Surfer viewer
-make check-tree        # Validate project directory structure
 make clean             # Remove build artifacts
 ```
 

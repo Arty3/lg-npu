@@ -2,10 +2,11 @@
 
 This document describes the execution model and data movement for the
 lg-npu compute backends: 2D convolution (`rtl/backends/conv/`), general
-matrix multiply (`rtl/backends/gemm/`), softmax (`rtl/backends/softmax/`),
-element-wise vector operations (`rtl/backends/vec/`), layer
-normalisation (`rtl/backends/lnorm/`), and 2D spatial pooling
-(`rtl/backends/pool/`).
+matrix multiply (`rtl/backends/gemm/`), element-wise vector operations
+(`rtl/backends/vec/`), and three composites: softmax
+(`rtl/composites/softmax/`), layer normalisation (`rtl/composites/lnorm/`),
+and 2D spatial pooling (`rtl/composites/pooling/`). Reusable post-processing
+ops live under `rtl/ops/`.
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -176,17 +177,17 @@ for a new (oh, ow, k), the accumulator is cleared to zero. Each MAC result
 from the PE array updates the accumulator entry. Once the inner loop
 completes, the accumulated value is forwarded to post-processing.
 
-### conv_postproc
+### postproc
 
-Pipeline stage that chains:
+Pipeline stage (`rtl/ops/postproc/postproc.sv`) that chains:
 
-1. **conv_bias** — Adds a sign-extended INT8 bias (`bias[k]`) to the INT32
+1. **bias_add** — Adds a sign-extended INT8 bias (`bias[k]`) to the INT32
    accumulator value.
-2. **conv_activation** — Configurable activation selected by `act_mode`:
+2. **activation** — Configurable activation selected by `act_mode`:
    - `ACT_NONE` (0, default): passthrough, no modification.
-   - `ACT_RELU` (1): `max(0, x)` — clamps negative values to zero.
+   - `ACT_RELU` (1): `max(0, x)` -- clamps negative values to zero.
    - `ACT_LEAKY_RELU` (2): `x >= 0 ? x : x >>> 3` (negative slope alpha = 1/8).
-3. **conv_quantize** — Right arithmetic shift by a programmable amount,
+3. **quantize** — Right arithmetic shift by a programmable amount,
    then signed saturation to [-128, +127], producing the final INT8 output.
 
 Each sub-stage is a single pipeline register on the `stream_if`
@@ -194,7 +195,7 @@ valid/ready path.
 
 ### conv_writer
 
-Takes the INT8 output from `conv_postproc` and issues a write request to the
+Takes the INT8 output from `postproc` and issues a write request to the
 activation buffer at the computed output address:
 
 ```
@@ -208,7 +209,7 @@ A write response from `mem_req_rsp_if` confirms the store.
 ## Pipeline Diagram (Single-PE, Steady State)
 
 ```
-Cycle   conv_loader    conv_pe (MAC)    conv_postproc    conv_writer
+Cycle   conv_loader    conv_pe (MAC)    postproc         conv_writer
 ──────  ────────────   ──────────────   ──────────────   ────────────
   t     read act[t]    acc += a·w [t-1]     —                —
   t+1   read wt[t+1]   acc += a·w [t]   bias+relu+q [t-1]   —
@@ -363,7 +364,7 @@ scheduler).
 
 ## Softmax Dataflow
 
-The softmax backend (`rtl/backends/softmax/`) computes the softmax function
+The softmax composite (`rtl/composites/softmax/`) computes the softmax function
 independently for each row of an M x N input matrix. All data types are
 INT8. The output is INT8 in the range [0, 127], representing probabilities
 scaled by 127.
@@ -535,7 +536,7 @@ total cycle count is approximately `3 * N + pipeline overhead`.
 
 ## LayerNorm Dataflow
 
-The lnorm backend (`rtl/backends/lnorm/`) computes row-wise layer
+The lnorm composite (`rtl/composites/lnorm/`) computes row-wise layer
 normalisation on an M x N input matrix. All data types are INT8. The
 output is INT8 in the range [-128, 127].
 
@@ -647,7 +648,7 @@ and writing). Total for a full operation: `M * (39 * N + 80)`.
 
 ## Pool Dataflow
 
-The pool backend (`rtl/backends/pool/`) computes 2-D spatial max or average
+The pool composite (`rtl/composites/pooling/`) computes 2-D spatial max or average
 pooling over an H x W x C input tensor in NHWC layout. All data types are
 INT8. The output tensor has shape OH x OW x C (channels are preserved).
 

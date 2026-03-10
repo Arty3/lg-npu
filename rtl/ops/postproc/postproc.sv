@@ -1,8 +1,8 @@
 // ============================================================================
-// conv_postproc.sv - Post-processing pipeline: bias -> ReLU -> quantize
+// postproc.sv - Post-processing pipeline: bias -> activation -> quantize
 // ============================================================================
 
-module conv_postproc
+module postproc
     import npu_types_pkg::*;
 (
     input  logic                       clk,
@@ -32,7 +32,7 @@ module conv_postproc
     logic signed [ACC_W-1:0]  relu_out;
     logic                     relu_valid, relu_ready;
 
-    conv_bias u_bias (
+    bias_add u_bias (
         .clk        (clk),
         .rst_n      (rst_n),
         .bias_val   (bias_val),
@@ -44,7 +44,7 @@ module conv_postproc
         .out_ready  (bias_ready)
     );
 
-    conv_activation u_relu (
+    activation u_relu (
         .clk        (clk),
         .rst_n      (rst_n),
         .act_mode   (act_mode),
@@ -56,7 +56,7 @@ module conv_postproc
         .out_ready  (relu_ready)
     );
 
-    conv_quantize u_quant (
+    quantize u_quant (
         .clk         (clk),
         .rst_n       (rst_n),
         .quant_shift (quant_shift),
@@ -68,4 +68,4 @@ module conv_postproc
         .out_ready   (out_ready)
     );
 
-endmodule : conv_postproc
+endmodule : postproc

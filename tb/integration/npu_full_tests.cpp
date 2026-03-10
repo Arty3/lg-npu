@@ -178,7 +178,7 @@ static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
                  "rand[%d] %dx%dx%d K=%d %dx%d s=%d,%d p=%d,%d q=%d %s",
                  generated, H, W, C, K, R, S, sh, sw, ph, pw, qshift, am_tag);
 
-        NpuTb tb;
+        NpuTb tb(generated == 0 ? "sim/waves/full_tests.vcd" : nullptr);
         tb.reset();
         tb.enable();
         r.record(run_test(tb, name, act, wt, bias,

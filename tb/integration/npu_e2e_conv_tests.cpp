@@ -42,7 +42,7 @@ int main(int argc, char **argv)
 
     // Test 1: Original 4x4x1, 3x3, stride=1, pad=0 (sanity)
     {
-        NpuTb tb("sim/waves/e2e_conv.vcd");
+        NpuTb tb("sim/waves/conv_tests.vcd");
         tb.reset();
         tb.enable();
 

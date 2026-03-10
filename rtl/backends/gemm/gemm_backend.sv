@@ -227,11 +227,11 @@ module gemm_backend
     logic pp_in_ready;
     assign pe_ready_out = last_inner_d ? pp_in_ready : 1'b1;
 
-    // conv_postproc (reused)
+    // postproc (reused)
     logic signed [DATA_W-1:0] pp_out_data;
     logic pp_out_valid, pp_out_ready;
 
-    conv_postproc u_postproc (
+    postproc u_postproc (
         .clk         (clk),
         .rst_n       (rst_n),
         .bias_val    (bias_val),
