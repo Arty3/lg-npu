@@ -66,7 +66,7 @@ for oh in 0 .. OH-1:          // output row
               acc[oh][ow][k] += act * wt    // INT8xINT8 -> INT32
       // post-processing
       acc[oh][ow][k] += bias[k]            // INT32 += sign_ext(INT8)
-      acc[oh][ow][k]  = max(0, acc[oh][ow][k])  // ReLU
+      acc[oh][ow][k]  = activate(acc, mode) // ReLU / None / Leaky ReLU
       out[oh][ow][k]  = quantize(acc[oh][ow][k]) // INT32 -> INT8
 ```
 
@@ -179,7 +179,10 @@ Pipeline stage that chains:
 
 1. **conv_bias** — Adds a sign-extended INT8 bias (`bias[k]`) to the INT32
    accumulator value.
-2. **conv_activation** — Applies ReLU: `result = (val < 0) ? 0 : val`.
+2. **conv_activation** — Configurable activation selected by `act_mode`:
+   - `ACT_NONE` (0, default): passthrough, no modification.
+   - `ACT_RELU` (1): `max(0, x)` — clamps negative values to zero.
+   - `ACT_LEAKY_RELU` (2): `x >= 0 ? x : x >>> 3` (negative slope alpha = 1/8).
 3. **conv_quantize** — Right arithmetic shift by a programmable amount,
    then signed saturation to [-128, +127], producing the final INT8 output.
 

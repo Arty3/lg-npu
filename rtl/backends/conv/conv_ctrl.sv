@@ -26,6 +26,7 @@ module conv_ctrl
     output dim_t                in_h, in_w, in_c, out_k, filt_r, filt_s,
     output dim_t                stride_h, stride_w, pad_h, pad_w,
     output logic [4:0]          quant_shift,
+    output act_mode_e             act_mode,
 
     // Derived output dimensions
     output dim_t                out_h, out_w,
@@ -188,6 +189,7 @@ module conv_ctrl
     assign pad_h       = cmd_r.pad_h;
     assign pad_w       = cmd_r.pad_w;
     assign quant_shift = cmd_r.quant_shift;
+    assign act_mode    = cmd_r.act_mode;
     assign out_h       = oh_max + 1;
     assign out_w       = ow_max + 1;
 

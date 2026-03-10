@@ -20,6 +20,17 @@ package npu_types_pkg;
     localparam int DIM_W = 16;
     typedef logic [DIM_W-1:0] dim_t;
 
+    // Activation-function selector
+    typedef enum logic [1:0]
+	{
+        ACT_NONE       = 2'b00,
+        ACT_RELU       = 2'b01,
+        ACT_LEAKY_RELU = 2'b10
+    }   act_mode_e;
+
+    // Leaky ReLU negative-slope shift (alpha = 1/2^LEAKY_SHIFT ~ 0.125)
+    localparam int LEAKY_SHIFT = 3;
+
     // Data-type enum (extensible for future types)
     typedef enum logic [2:0]
 	{

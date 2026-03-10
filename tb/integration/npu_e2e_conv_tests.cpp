@@ -55,7 +55,7 @@ int main(int argc, char **argv)
             act, wt, bias,
             4, 4, 1, 1, 3, 3,
             1, 1, 0, 0, 0,
-            0, 0, 0, 4096));
+            ACT_MODE_RELU, 0, 0, 0, 4096));
     }
 
     // Test 2: 5x5x1, 3x3, stride=1, pad=0 -> 3x3 output
@@ -90,7 +90,7 @@ int main(int argc, char **argv)
             act, wt, bias,
             4, 4, 2, 1, 3, 3,
             1, 1, 0, 0, 0,
-            0, 0, 0, 2048));
+            ACT_MODE_RELU, 0, 0, 0, 2048));
     }
 
     // Test 4: 4x4x1, K=2, 3x3 filter (multi-filter)

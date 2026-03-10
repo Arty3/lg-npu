@@ -109,6 +109,7 @@ module npu_cmd_decode
             cmd_r.pad_h        <= desc_regs[13][DIM_W-1:0];
             cmd_r.pad_w        <= desc_regs[14][DIM_W-1:0];
             cmd_r.quant_shift  <= desc_regs[15][4:0];
+            cmd_r.act_mode     <= act_mode_e'(desc_regs[15][6:5]);
         end
     end
 

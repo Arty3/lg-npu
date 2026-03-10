@@ -78,7 +78,8 @@ static bool run_test(
     const std::vector<int8_t> &bias,
     int H, int W, int C, int K, int R, int S,
     int sh, int sw, int ph, int pw,
-    int qshift)
+    int qshift,
+    uint32_t act_mode = ACT_MODE_RELU)
 {
     int in_bytes = H * W * C;
     // Place output right after input, aligned up to next 256-byte boundary
@@ -89,6 +90,7 @@ static bool run_test(
         name, act, wt, bias,
         H, W, C, K, R, S,
         sh, sw, ph, pw, qshift,
+        act_mode,
         /*act_in_addr=*/0,
         /*wt_addr=*/0,
         /*bias_addr=*/bias_addr,
@@ -154,16 +156,27 @@ static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
                 bias[b] = static_cast<int8_t>(bval(rng));
         }
 
+        // Random activation mode (~1/3 each)
+        std::uniform_int_distribution<int> act_coin(0, 2);
+        int am = act_coin(rng);
+        uint32_t act_mode = (am == 0) ? ACT_MODE_RELU
+                          : (am == 1) ? ACT_MODE_NONE
+                          :             ACT_MODE_LEAKY_RELU;
+        const char *am_tag = (act_mode == ACT_MODE_RELU) ? "relu"
+                           : (act_mode == ACT_MODE_NONE) ? "none"
+                           :                               "leaky";
+
         char name[128];
         snprintf(name, sizeof(name),
-                 "rand[%d] %dx%dx%d K=%d %dx%d s=%d,%d p=%d,%d q=%d",
-                 generated, H, W, C, K, R, S, sh, sw, ph, pw, qshift);
+                 "rand[%d] %dx%dx%d K=%d %dx%d s=%d,%d p=%d,%d q=%d %s",
+                 generated, H, W, C, K, R, S, sh, sw, ph, pw, qshift, am_tag);
 
         NpuTb tb;
         tb.reset();
         tb.enable();
         r.record(run_test(tb, name, act, wt, bias,
-                          H, W, C, K, R, S, sh, sw, ph, pw, qshift));
+                          H, W, C, K, R, S, sh, sw, ph, pw, qshift,
+                          act_mode));
         ++generated;
     }
 }
@@ -855,6 +868,133 @@ static void run_invalid_command_tests(TestResult &r)
     }
 }
 
+// Section 5: Activation function tests
+static void run_activation_tests(TestResult &r)
+{
+    printf("\n--- Activation Function Tests ---\n\n");
+
+    // 5a: ACT_NONE: negative accumulation passes through (no ReLU clamp)
+    //     4x4x1, 3x3 all-1 weights, act=-1 -> acc = 9*(-1)*1 = -9
+    //     With no activation and q=0, output = saturate(-9) = -9
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "act_none neg passthrough",
+                          const_fill(4 * 4, -1),
+                          const_fill(9, 1), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_NONE));
+    }
+
+    // 5b: ACT_NONE: positive values unchanged (same as ReLU for positives)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "act_none pos passthrough",
+                          seq_fill(4 * 4, 1),
+                          const_fill(9, 1), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_NONE));
+    }
+
+    // 5c: ACT_NONE with quant shift: negative acc >> shift saturated
+    //     acc = 9*(-128)*127 = -146304, >> 11 = -72 (no clamp)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "act_none neg + qshift=11",
+                          const_fill(4 * 4, -128),
+                          const_fill(9, 127), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 11,
+                          ACT_MODE_NONE));
+    }
+
+    // 5d: Leaky ReLU: positive values pass through unchanged
+    //     Same as ReLU for positives
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "leaky_relu pos passthrough",
+                          seq_fill(4 * 4, 1),
+                          const_fill(9, 1), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_LEAKY_RELU));
+    }
+
+    // 5e: Leaky ReLU: negative accumulation scaled by 1/8
+    //     acc = 9*(-1)*1 = -9, leaky = -9 >> 3 = -2 (arith shift), q=0 -> -2
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "leaky_relu neg scale",
+                          const_fill(4 * 4, -1),
+                          const_fill(9, 1), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_LEAKY_RELU));
+    }
+
+    // 5f: Leaky ReLU with large negative + quant shift
+    //     act=-128, wt=127 -> acc = 9*(-128)*127 = -146304
+    //     leaky = -146304 >> 3 = -18288, >> 11 = -9
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "leaky_relu large neg + qshift=11",
+                          const_fill(4 * 4, -128),
+                          const_fill(9, 127), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 11,
+                          ACT_MODE_LEAKY_RELU));
+    }
+
+    // 5g: Leaky ReLU with bias pushing negative
+    //     acc = 9*1*1 = 9, bias = -50 -> -41, leaky = -41 >> 3 = -6, q=0 -> -6
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "leaky_relu neg bias",
+                          const_fill(4 * 4, 1),
+                          const_fill(9, 1),
+                          const_fill(1, -50),
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_LEAKY_RELU));
+    }
+
+    // 5h: Leaky ReLU multi-filter: K=2, per-filter bias
+    //     k=0: acc=9, bias=100 -> 109 (positive, pass through)
+    //     k=1: acc=9, bias=-100 -> -91, leaky = -91>>3 = -12
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> bias = {100, -100};
+        r.record(run_test(tb, "leaky_relu K=2 mixed",
+                          const_fill(4 * 4, 1),
+                          const_fill(2 * 9, 1),
+                          bias,
+                          4, 4, 1, 2, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_LEAKY_RELU));
+    }
+
+    // 5i: ReLU still works (regression): negative clamped to 0
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        r.record(run_test(tb, "relu neg clamp (regression)",
+                          const_fill(4 * 4, -1),
+                          const_fill(9, 1), {},
+                          4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0,
+                          ACT_MODE_RELU));
+    }
+}
+
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
@@ -870,6 +1010,7 @@ int main(int argc, char **argv)
     run_randomized_sweeps(r, 50, seed);
     run_edge_value_tests(r);
     run_dimension_sweeps(r);
+    run_activation_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

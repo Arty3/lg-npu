@@ -39,6 +39,9 @@ package npu_cmd_pkg;
 
         // Quantization shift (right arithmetic shift for INT32->INT8)
         logic [4:0]            quant_shift;
+
+        // Activation function selector
+        act_mode_e             act_mode;
     }   conv_cmd_t;
 
     // Generic command wrapper (reserved for future multi-backend dispatch)

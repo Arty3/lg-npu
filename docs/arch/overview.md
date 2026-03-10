@@ -141,7 +141,7 @@ The compute engine. Described in detail in [conv_dataflow.md](conv_dataflow.md).
 | `conv_pe` | Single processing element: INT8xINT8 multiply, INT32 accumulate. |
 | `conv_accum` | Accumulation register file for partial sums across input channels. |
 | `conv_bias` | Adds an INT8 bias (sign-extended to INT32) to the accumulated result. |
-| `conv_activation` | Applies ReLU (clamp negative to zero) on the INT32 value. |
+| `conv_activation` | Configurable activation: ReLU (default), None, or Leaky ReLU (alpha = 1/8). |
 | `conv_quantize` | Requantizes the INT32 accumulator back to INT8 (shift + saturate). |
 | `conv_postproc` | Chains bias -> activation -> quantize into a single post-processing pipeline stage. |
 | `conv_writer` | Writes the final INT8 output tile back into the activation buffer. |
@@ -182,7 +182,8 @@ All external data is INT8 (signed, two's complement). Internally:
 - The MAC operation is `INT8 x INT8 -> INT32` with INT32 accumulation across
   input channels.
 - Bias addition is `INT32 + INT32` (bias is sign-extended from INT8).
-- ReLU operates on INT32 (`max(0, x)`).
+- Activation operates on INT32. Selectable via `act_mode`:
+  ReLU `max(0, x)`, None (passthrough), or Leaky ReLU (`x >= 0 ? x : x >>> 3`).
 - Requantization converts INT32 -> INT8 via a right arithmetic shift and
   signed saturation to `[-128, +127]`.
 
@@ -203,7 +204,7 @@ No floating-point hardware exists anywhere in the design.
 5. **Compute** — `conv_ctrl` sequences through the output tile. For each
    output pixel, the PE array multiplies the weight window by the
    activation window, accumulates across input channels, applies
-   post-processing (bias -> ReLU -> quantize), and writes the INT8 result
+   post-processing (bias -> activation -> quantize), and writes the INT8 result
    back to the activation buffer.
 6. **Complete** — `npu_completion` records the done event and triggers
    `npu_irq_ctrl`.

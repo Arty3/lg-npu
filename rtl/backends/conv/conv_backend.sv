@@ -56,6 +56,7 @@ module conv_backend
     dim_t in_h, in_w, in_c, out_k, filt_r, filt_s;
     dim_t stride_h, stride_w, pad_h, pad_w;
     logic [4:0] quant_shift;
+    act_mode_e act_mode;
     dim_t out_h, out_w;
     /* verilator lint_on UNUSEDSIGNAL */
     logic iter_valid, iter_ready;
@@ -89,6 +90,7 @@ module conv_backend
         .pad_h       (pad_h),
         .pad_w       (pad_w),
         .quant_shift (quant_shift),
+        .act_mode    (act_mode),
         .out_h       (out_h),
         .out_w       (out_w),
         .iter_valid  (iter_valid),
@@ -266,6 +268,7 @@ module conv_backend
         .rst_n       (rst_n),
         .bias_val    (bias_val),
         .quant_shift (quant_shift),
+        .act_mode    (act_mode),
         .in_data     (acc_out_val),
         .in_valid    (pp_trigger_r),
         .in_ready    (pp_in_ready),

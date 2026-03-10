@@ -56,6 +56,7 @@ struct ConvDesc
     uint32_t stride_h, stride_w;
     uint32_t pad_h, pad_w;
     uint32_t quant_shift;
+    uint32_t act_mode;      // 0=ReLU (default), 1=None, 2=Leaky ReLU
 
     void to_words(uint32_t out[16]) const
     {
@@ -74,9 +75,17 @@ struct ConvDesc
         out[12] = stride_w;
         out[13] = pad_h;
         out[14] = pad_w;
-        out[15] = quant_shift;
+        out[15] = (quant_shift & 0x1F) | ((act_mode & 0x3) << 5);
     }
 };
+
+// Activation mode constants (match act_mode_e in npu_types_pkg.sv)
+static constexpr uint32_t ACT_MODE_NONE       = 0;
+static constexpr uint32_t ACT_MODE_RELU       = 1;
+static constexpr uint32_t ACT_MODE_LEAKY_RELU = 2;
+
+// Leaky ReLU shift (must match LEAKY_SHIFT in npu_types_pkg.sv)
+static constexpr int LEAKY_SHIFT = 3;
 
 // C++ reference convolution (INT8 in -> INT32 accum -> INT8 out)
 inline std::vector<int8_t> ref_conv(
@@ -85,7 +94,8 @@ inline std::vector<int8_t> ref_conv(
     const std::vector<int8_t> &bias,
     int H, int W, int C, int K, int R, int S,
     int stride_h, int stride_w, int pad_h, int pad_w,
-    int quant_shift)
+    int quant_shift,
+    uint32_t act_mode = ACT_MODE_RELU)
 {
     int OH = (H + 2 * pad_h - R) / stride_h + 1;
     int OW = (W + 2 * pad_w - S) / stride_w + 1;
@@ -117,8 +127,16 @@ inline std::vector<int8_t> ref_conv(
                 // Bias
                 if (!bias.empty())
                     acc += static_cast<int32_t>(bias[k]);
-                // ReLU
-                if (acc < 0) acc = 0;
+                // Activation
+                if (act_mode == ACT_MODE_RELU)
+                {
+                    if (acc < 0) acc = 0;
+                }
+                else if (act_mode == ACT_MODE_LEAKY_RELU)
+                {
+                    if (acc < 0) acc >>= LEAKY_SHIFT;
+                }
+                // ACT_MODE_NONE: passthrough
                 // Quantize (right arith shift + saturate to [-128, 127])
                 acc >>= quant_shift;
                 if (acc > 127) acc = 127;
@@ -311,6 +329,7 @@ public:
         int H, int W, int C, int K, int R, int S,
         int sh, int sw, int ph, int pw,
         int qshift,
+        uint32_t act_mode     = ACT_MODE_RELU,
         uint32_t act_in_addr  = 0,
         uint32_t wt_addr      = 0,
         uint32_t bias_addr    = 0,
@@ -318,7 +337,7 @@ public:
     {
         // Compute reference
         auto expected = ref_conv(act, wt, bias, H, W, C, K, R, S,
-                                 sh, sw, ph, pw, qshift);
+                                 sh, sw, ph, pw, qshift, act_mode);
         int out_size = static_cast<int>(expected.size());
 
         // Load weights
@@ -358,6 +377,7 @@ public:
         desc.pad_h        = static_cast<uint32_t>(ph);
         desc.pad_w        = static_cast<uint32_t>(pw);
         desc.quant_shift  = static_cast<uint32_t>(qshift);
+        desc.act_mode     = act_mode;
         submit_conv(desc);
 
         // Wait for completion

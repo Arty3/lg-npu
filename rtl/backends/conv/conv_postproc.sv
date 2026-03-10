@@ -11,6 +11,7 @@ module conv_postproc
     // Configuration
     input  logic signed [DATA_W-1:0]   bias_val,
     input  logic [4:0]                 quant_shift,
+    input  act_mode_e                  act_mode,
 
     // Stream in  (INT32 accumulator result)
     input  logic signed [ACC_W-1:0]    in_data,
@@ -46,6 +47,7 @@ module conv_postproc
     conv_activation u_relu (
         .clk        (clk),
         .rst_n      (rst_n),
+        .act_mode   (act_mode),
         .in_data    (bias_out),
         .in_valid   (bias_valid),
         .in_ready   (bias_ready),

@@ -39,7 +39,8 @@ discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 | 12 | `stride_w` | 16 bits | Horizontal stride |
 | 13 | `pad_h` | 16 bits | Vertical zero-padding (each side) |
 | 14 | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
-| 15 | `quant_shift` | 5 bits | Right-shift for INT32->INT8 quantisation |
+| 15 | `quant_shift` | 5 bits (bits [4:0]) | Right-shift for INT32->INT8 quantisation |
+| 15 | `act_mode` | 2 bits (bits [6:5]) | Activation function: 0 = None, 1 = ReLU, 2 = Leaky ReLU |
 
 Unused upper bits within each 32-bit word are reserved and should be written
 as zero.
