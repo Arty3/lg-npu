@@ -46,4 +46,8 @@ if [[ ! -f "${WAVE_FILE}" ]]; then
 fi
 
 echo "Opening ${WAVE_FILE} in Surfer ..."
-surfer "${WAVE_FILE}"
+
+# Surfer may exit non-zero under WSLg due to X11 clipboard teardown errors.
+# This is cosmetic — the viewer works fine — so we suppress the exit code
+# and filter out the clipboard noise on stderr.
+surfer "${WAVE_FILE}" 2> >(grep -v -E 'clipboard|Broken pipe|panicked|ExitFailure|RUST_BACKTRACE' >&2) || true

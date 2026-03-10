@@ -10,6 +10,7 @@ module conv_addr_gen
     input  logic [ADDR_W-1:0]  wt_base,
 
     // Spatial parameters
+    input  dim_t               in_h,
     input  dim_t               in_w,
     input  dim_t               in_c,
     input  dim_t               filt_r,
@@ -39,8 +40,8 @@ module conv_addr_gen
     assign ih = oh * stride_h + r - pad_h;
     assign iw = ow * stride_w + s - pad_w;
 
-    // Out-of-bounds check (signed comparison via MSB for underflow)
-    assign zero_pad = ih[DIM_W-1] | iw[DIM_W-1];
+    // Out-of-bounds check (negative via MSB, or >= input dimension)
+    assign zero_pad = ih[DIM_W-1] | iw[DIM_W-1] | (ih >= in_h) | (iw >= in_w);
 
     // act_addr = act_base + ((ih * in_w) + iw) * in_c + c
     assign act_addr = act_base + ADDR_W'(((ih * in_w) + iw) * in_c + c);

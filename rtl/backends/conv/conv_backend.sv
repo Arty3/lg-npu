@@ -106,6 +106,7 @@ module conv_backend
     conv_addr_gen u_addr_gen (
         .act_base (act_base),
         .wt_base  (wt_base),
+        .in_h     (in_h),
         .in_w     (in_w),
         .in_c     (in_c),
         .filt_r   (filt_r),

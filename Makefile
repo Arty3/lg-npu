@@ -6,9 +6,18 @@ TOP       := npu_shell
 SIM_BUILD := sim/build
 SIM_OUT   := sim/results
 VEC_DIR   := tb/vectors
+WAVE_DIR  := sim/waves
 
 VERILATOR := verilator
 PYTHON    := python3
+
+# Common verilator flags
+VFLAGS := --sv --cc --exe --build \
+          --top-module $(TOP) \
+          -Wall -Wno-MULTITOP \
+          --trace \
+          -CFLAGS "-std=c++17 -I$(REPO_ROOT)tb/integration" \
+          -f $(FILELIST)
 
 .PHONY: help
 help: ## Show available targets
@@ -29,16 +38,33 @@ $(SIM_BUILD):
 $(SIM_OUT):
 	mkdir -p $(SIM_OUT)
 
+$(WAVE_DIR):
+	mkdir -p $(WAVE_DIR)
+
+# Build a test binary: $(call build_test,<build-subdir>,<harness-cpp>)
+define build_test
+	$(VERILATOR) $(VFLAGS) \
+		--Mdir $(SIM_BUILD)/$(1) \
+		$(REPO_ROOT)$(2)
+endef
+
+# Legacy compile target (original E2E harness)
 .PHONY: compile
 compile: $(SIM_BUILD) ## Verilate the design (compile to C++)
-	$(VERILATOR) --sv --cc --exe --build \
-		--top-module $(TOP) \
-		-Wall -Wno-MULTITOP \
-		--Mdir $(SIM_BUILD) \
-		--trace \
-		-CFLAGS "-std=c++17" \
-		-f $(FILELIST) \
-		$(REPO_ROOT)tb/integration/npu_e2e_harness.cpp
+	$(call build_test,e2e,tb/integration/npu_e2e_harness.cpp)
+
+# Compile each test suite into its own build directory
+.PHONY: compile-conv-tests
+compile-conv-tests: $(SIM_BUILD)
+	$(call build_test,conv_tests,tb/integration/npu_e2e_conv_tests.cpp)
+
+.PHONY: compile-control-tests
+compile-control-tests: $(SIM_BUILD)
+	$(call build_test,control_tests,tb/integration/npu_control_tests.cpp)
+
+.PHONY: compile-perf-tests
+compile-perf-tests: $(SIM_BUILD)
+	$(call build_test,perf_tests,tb/perf/npu_perf_tests.cpp)
 
 .PHONY: sim-unit
 sim-unit: ## Run unit-level tests
@@ -53,13 +79,25 @@ sim-integration: ## Run integration tests
 	bash sim/scripts/run_integration.sh
 
 .PHONY: sim-smoke
-sim-smoke: ## Run smoke regression
-	bash sim/scripts/run_all.sh sim/regressions/smoke.list
+sim-smoke: sim-conv-tests sim-control-tests sim-perf-tests ## Run smoke regression (all test suites)
+	@echo ""
+	@echo "=== sim-smoke: ALL SUITES PASSED ==="
 
 .PHONY: sim-e2e
-sim-e2e: compile $(SIM_OUT) ## Run end-to-end convolution test
-	mkdir -p sim/waves
-	$(SIM_BUILD)/V$(TOP)
+sim-e2e: compile $(SIM_OUT) $(WAVE_DIR) ## Run original end-to-end convolution test
+	$(SIM_BUILD)/e2e/V$(TOP)
+
+.PHONY: sim-conv-tests
+sim-conv-tests: compile-conv-tests $(SIM_OUT) $(WAVE_DIR) ## Run deterministic conv test suite (10 cases)
+	$(SIM_BUILD)/conv_tests/V$(TOP)
+
+.PHONY: sim-control-tests
+sim-control-tests: compile-control-tests $(SIM_OUT) $(WAVE_DIR) ## Run control/sequencing test suite
+	$(SIM_BUILD)/control_tests/V$(TOP)
+
+.PHONY: sim-perf-tests
+sim-perf-tests: compile-perf-tests $(SIM_OUT) $(WAVE_DIR) ## Run performance counter test suite
+	$(SIM_BUILD)/perf_tests/V$(TOP)
 
 .PHONY: sim-full
 sim-full: ## Run full regression
