@@ -9,9 +9,9 @@ as possible:
 | Aspect | Decision |
 |--------|----------|
 | Data type | INT8 (signed 8-bit) exclusively. Weights, activations, and biases are all INT8; the MAC array accumulates into INT32, and a post-processing quantize step converts the result back to INT8. |
-| Compute | 2D convolution, general matrix multiply (GEMM), softmax, and element-wise vector operations (ADD, MUL). No pooling. |
+| Compute | 2D convolution, general matrix multiply (GEMM), softmax, element-wise vector operations (ADD, MUL), and layer normalisation. No pooling. |
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
-| Command interface | Four opcodes (`CONV`, `GEMM`, `SOFTMAX`, `VEC`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, softmax, or vector operation. |
+| Command interface | Five opcodes (`CONV`, `GEMM`, `SOFTMAX`, `VEC`, `LNORM`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, softmax, vector operation, or layer normalisation. |
 | Memory | Local on-chip SRAM only (weight buffer, activation buffer, partial-sum buffer). No external DRAM path; no DMA transfers. Software pre-loads buffers before issuing the command. |
 | Platform | Simulation-only. No FPGA or ASIC bring-up. |
 
@@ -54,14 +54,17 @@ graph TD
         dispatch -- "OP_GEMM" --> gemm
         dispatch -- "OP_SOFTMAX" --> smax["softmax_backend"]
         dispatch -- "OP_VEC" --> vec["vec_backend"]
+        dispatch -- "OP_LNORM" --> lnorm["lnorm_backend"]
         dispatch -- "OP_CONV" --> conv
         gemm <--> mem_top
         smax <--> mem_top
         vec <--> mem_top
+        lnorm <--> mem_top
         conv <--> mem_top
         gemm --> completion
         smax --> completion
         vec --> completion
+        lnorm --> completion
         conv --> completion
         mem_top --> completion
 
@@ -112,7 +115,7 @@ Orchestrates command execution.
 | Module | Role |
 |--------|------|
 | `npu_scheduler` | Picks the next command from the queue. In the current scope this is trivial — in-order, one at a time. |
-| `npu_dispatch` | Routes the command to the appropriate backend based on opcode (GEMM > Softmax > Conv priority). Memory port signals are muxed via a 2-bit registered backend selector. |
+| `npu_dispatch` | Routes the command to the appropriate backend based on opcode (GEMM > Softmax > Vec > LayerNorm > Conv priority). Memory port signals are muxed via a 3-bit registered backend selector. |
 | `npu_completion` | Tracks when the backend signals done, writes a completion entry, and triggers `npu_irq_ctrl`. |
 | `npu_status` | Aggregates internal state into the status register read by the host. The idle flag accounts for backend busy, queue occupancy, **and** `cmd_pipe_busy` (fetch or decode in progress), preventing the host from seeing a false idle while a command is still being ingested. |
 
@@ -187,6 +190,32 @@ Does not use the weight buffer or PE array.
 Described in detail in
 [compute_dataflow.md](compute_dataflow.md#softmax-dataflow).
 
+### Vec Backend (`rtl/backends/vec/`)
+
+Element-wise vector operation engine. Does not use the PE array, accumulator,
+or bias port.
+
+| Module | Role |
+|--------|------|
+| `vec_backend` | Top-level backend wrapper. Ties off unused bias port. |
+| `vec_ctrl` | FSM with parallel A/B reads, compute, and write phases. |
+
+Described in detail in
+[compute_dataflow.md](compute_dataflow.md#vec-dataflow).
+
+### LayerNorm Backend (`rtl/backends/lnorm/`)
+
+Row-wise layer normalisation engine using a multi-pass algorithm over local
+SRAM. Does not use the weight buffer, PE array, or bias port.
+
+| Module | Role |
+|--------|------|
+| `lnorm_backend` | Top-level backend wrapper. Ties off unused weight/bias ports. |
+| `lnorm_ctrl` | Multi-pass FSM: SUM -> MEAN_DIV -> VAR -> VAR_DIV -> SQRT -> NORMALIZE (per-element serial divider). |
+
+Described in detail in
+[compute_dataflow.md](compute_dataflow.md#layernorm-dataflow).
+
 ### Interrupt & Reset (`rtl/control/`)
 
 | Module | Role |
@@ -256,7 +285,7 @@ No floating-point hardware exists anywhere in the design.
 ## What Is Explicitly Out Of Scope
 
 - Additional data types (FP16, BF16, INT4, INT16).
-- Operations beyond 2D convolution and GEMM (pooling, element-wise, softmax).
+- Operations beyond 2D convolution and GEMM (pooling, depthwise conv, transpose conv).
 - Multiple tensor layouts or layout conversion.
 - External memory (DRAM) and the DMA subsystem.
 - Multi-command pipelining or out-of-order execution.

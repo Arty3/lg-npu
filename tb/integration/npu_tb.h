@@ -153,6 +153,118 @@ struct VecDesc
     }
 };
 
+// LayerNorm command descriptor (16 words, same transport as ConvDesc)
+struct LnormDesc
+{
+    uint32_t opcode     = 5;  // OP_LNORM
+    uint32_t in_addr    = 0;  // Input base (activation buffer)
+    uint32_t out_addr   = 0;  // Output base (activation buffer)
+    uint32_t num_rows   = 0;  // M - independent rows
+    uint32_t row_len    = 0;  // N - elements per row
+    uint32_t norm_shift = 0;  // Left shift applied before division
+
+    void to_words(uint32_t out[16]) const
+    {
+        std::memset(out, 0, sizeof(uint32_t) * 16);
+        out[0]  = opcode;
+        out[1]  = in_addr;
+        out[2]  = out_addr;
+        out[5]  = num_rows;
+        out[6]  = row_len;
+        out[15] = norm_shift & 0x1F;
+    }
+};
+
+// Integer square root matching hardware digit-by-digit algorithm
+inline uint16_t isqrt_hw(uint32_t n)
+{
+    uint32_t rem = 0;
+    uint16_t result = 0;
+    for (int i = 15; i >= 0; --i)
+    {
+        rem = (rem << 2) | ((n >> (2 * i)) & 3);
+        uint32_t trial = (static_cast<uint32_t>(result) << 2) | 1;
+        if (rem >= trial)
+        {
+            rem -= trial;
+            result = (result << 1) | 1;
+        }
+        else
+        {
+            result = result << 1;
+        }
+    }
+    return result;
+}
+
+// C++ reference LayerNorm (INT8 in -> INT8 out)
+//   Per row: mean = sum/N, var = sum((x-mean)^2)/N,
+//   std = isqrt(var+1), out = clamp(((x-mean)<<shift)/std, -128, 127)
+inline std::vector<int8_t> ref_lnorm(
+    const std::vector<int8_t> &input,
+    int num_rows, int row_len,
+    int norm_shift)
+{
+    std::vector<int8_t> out(num_rows * row_len);
+    for (int r = 0; r < num_rows; ++r)
+    {
+        int base = r * row_len;
+
+        // Pass 1: sum
+        int32_t sum = 0;
+        for (int i = 0; i < row_len; ++i)
+            sum += static_cast<int32_t>(input[base + i]);
+
+        // Mean (integer division toward zero)
+        int32_t mean = sum / static_cast<int32_t>(row_len);
+
+        // Pass 2: variance
+        uint32_t var_sum = 0;
+        for (int i = 0; i < row_len; ++i)
+        {
+            int32_t diff = static_cast<int32_t>(input[base + i]) - mean;
+            var_sum += static_cast<uint32_t>(diff * diff);
+        }
+        uint32_t variance = var_sum / static_cast<uint32_t>(row_len);
+
+        // Integer sqrt of (variance + 1)
+        uint16_t std_val = isqrt_hw(variance + 1);
+        if (std_val == 0) std_val = 1;
+
+        // Pass 3: normalize
+        for (int i = 0; i < row_len; ++i)
+        {
+            int32_t diff = static_cast<int32_t>(input[base + i]) - mean;
+            bool neg = (diff < 0);
+            uint32_t abs_diff = neg ? static_cast<uint32_t>(-diff)
+                                    : static_cast<uint32_t>(diff);
+
+            // Shift and saturate to 32 bits
+            uint64_t wide = static_cast<uint64_t>(abs_diff) << norm_shift;
+            uint32_t scaled = (wide > 0xFFFFFFFFu) ? 0xFFFFFFFFu
+                                                   : static_cast<uint32_t>(wide);
+
+            // Unsigned division
+            uint32_t quot = scaled / static_cast<uint32_t>(std_val);
+
+            // Restore sign and clamp
+            int32_t result;
+            if (neg)
+            {
+                if (quot > 128u) result = -128;
+                else             result = -static_cast<int32_t>(quot);
+            }
+            else
+            {
+                if (quot > 127u) result = 127;
+                else             result = static_cast<int32_t>(quot);
+            }
+            out[base + i] = static_cast<int8_t>(result);
+        }
+    }
+    return out;
+}
+
 // Activation mode constants (match act_mode_e in npu_types_pkg.sv)
 static constexpr uint32_t ACT_MODE_NONE       = 0;
 static constexpr uint32_t ACT_MODE_RELU       = 1;
@@ -548,6 +660,17 @@ public:
         run_clocks(2000);
     }
 
+    // Submit a lnorm command and ring the doorbell
+    void submit_lnorm(const LnormDesc &desc)
+    {
+        uint32_t words[16];
+        desc.to_words(words);
+        for (int i = 0; i < 16; ++i)
+            mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+        mmio_write(REG_DOORBELL, 1);
+        run_clocks(2000);
+    }
+
     // Wait for the NPU to become idle, with a cycle timeout.
     // Returns true if idle was reached, false on timeout.
     bool wait_idle(int max_polls = 200000)
@@ -792,6 +915,50 @@ public:
         desc.quant_shift = static_cast<uint32_t>(qshift);
         desc.act_mode    = act_mode;
         submit_vec(desc);
+
+        if (!wait_idle())
+        {
+            printf("  [FAIL] %s: TIMEOUT waiting for idle\n", name);
+            return false;
+        }
+
+        auto got = read_bytes(ACT_BUF_BASE + out_addr, out_size);
+        bool pass = true;
+        for (int i = 0; i < out_size; ++i)
+        {
+            if (got[i] != expected[i])
+            {
+                printf("  [FAIL] %s: output[%d] expected %d, got %d\n",
+                       name, i, expected[i], got[i]);
+                pass = false;
+            }
+        }
+        if (pass)
+            printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+        return pass;
+    }
+
+    // Run a lnorm op end-to-end: load data, fire command, wait, read back.
+    bool run_lnorm_test(
+        const char *name,
+        const std::vector<int8_t> &input,
+        int num_rows, int row_len,
+        int norm_shift,
+        uint32_t in_addr  = 0,
+        uint32_t out_addr = 2048)
+    {
+        auto expected = ref_lnorm(input, num_rows, row_len, norm_shift);
+        int out_size = static_cast<int>(expected.size());
+
+        load_bytes(ACT_BUF_BASE + in_addr, input);
+
+        LnormDesc desc{};
+        desc.in_addr    = in_addr;
+        desc.out_addr   = out_addr;
+        desc.num_rows   = static_cast<uint32_t>(num_rows);
+        desc.row_len    = static_cast<uint32_t>(row_len);
+        desc.norm_shift = static_cast<uint32_t>(norm_shift);
+        submit_lnorm(desc);
 
         if (!wait_idle())
         {

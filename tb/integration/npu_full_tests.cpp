@@ -9,6 +9,7 @@
 //   6. GEMM tests
 //   7. Softmax tests
 //   8. Vec tests
+//   9. LayerNorm tests
 
 #include "npu_tb.h"
 
@@ -605,13 +606,142 @@ static void run_dimension_sweeps(TestResult &r)
     }
 }
 
+// Section 9: LayerNorm tests
+static void run_lnorm_tests(TestResult &r)
+{
+    printf("\n--- LayerNorm Tests ---\n\n");
+
+    // 9a: Single element (N=1) - mean = x, var = 0, std = 1, output = 0
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {42};
+        r.record(tb.run_lnorm_test("lnorm single N=1", input, 1, 1, 0));
+    }
+
+    // 9b: All-same values - output all zeros
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {10, 10, 10, 10};
+        r.record(tb.run_lnorm_test("lnorm all-same", input, 1, 4, 0));
+    }
+
+    // 9c: Simple pair [0, 4] shift=0
+    //   mean=2, var_sum=8, var=4, std=isqrt(5)=2, out=[-1, 1]
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {0, 4};
+        r.record(tb.run_lnorm_test("lnorm pair [0,4] s=0", input, 1, 2, 0));
+    }
+
+    // 9d: Simple pair with shift=3
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {0, 10};
+        r.record(tb.run_lnorm_test("lnorm pair [0,10] s=3", input, 1, 2, 3));
+    }
+
+    // 9e: Multi-element row
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {-4, -2, 0, 2, 4, 6};
+        r.record(tb.run_lnorm_test("lnorm 6-elem s=2", input, 1, 6, 2));
+    }
+
+    // 9f: Multi-row (M=2, N=4)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {
+             1, 3, 5, 7,       // row 0: mean=4
+            -10, -5, 0, 5      // row 1: mean=-2 (integer truncation of -10/4)
+        };
+        r.record(tb.run_lnorm_test("lnorm 2x4 s=2", input, 2, 4, 2));
+    }
+
+    // 9g: Saturation test - large shift forces clamping
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {-128, 127, -128, 127};
+        r.record(tb.run_lnorm_test("lnorm saturate s=7", input, 1, 4, 7));
+    }
+
+    // 9h: Negative mean with odd sum
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input = {-7, -3, -1};
+        r.record(tb.run_lnorm_test("lnorm neg mean s=1", input, 1, 3, 1));
+    }
+
+    // 9i: Random 16-element test
+    {
+        std::mt19937 rng(301);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(16);
+        std::uniform_int_distribution<int> dist(-128, 127);
+        for (int i = 0; i < 16; ++i)
+            input[i] = static_cast<int8_t>(dist(rng));
+        r.record(tb.run_lnorm_test("lnorm rand-16 s=4", input, 1, 16, 4));
+    }
+
+    // 9j: Random multi-row (M=3, N=8)
+    {
+        std::mt19937 rng(302);
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+        std::vector<int8_t> input(24);
+        std::uniform_int_distribution<int> dist(-128, 127);
+        for (int i = 0; i < 24; ++i)
+            input[i] = static_cast<int8_t>(dist(rng));
+        r.record(tb.run_lnorm_test("lnorm rand 3x8 s=3", input, 3, 8, 3));
+    }
+
+    // 9k: Lnorm then conv on same instance (backend interleave)
+    {
+        NpuTb tb;
+        tb.reset();
+        tb.enable();
+
+        // First: lnorm 1x4
+        std::vector<int8_t> ln_in = {-2, 0, 2, 4};
+        bool ln_ok = tb.run_lnorm_test("lnorm-then-conv (lnorm)",
+                                        ln_in, 1, 4, 2);
+
+        // Second: conv 4x4x1 k3
+        auto ca  = seq_fill(4 * 4, 1);
+        auto cwt = const_fill(9, 1);
+        bool conv_ok = tb.run_conv_test("lnorm-then-conv (conv)",
+                                        ca, cwt, {},
+                                        4, 4, 1, 1, 3, 3,
+                                        1, 1, 0, 0, 0);
+        r.record(ln_ok && conv_ok);
+    }
+}
+
 // Section 4: Invalid-command and error-path tests
 static void run_invalid_command_tests(TestResult &r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
-    // 4a: Bad opcodes (0, 5..15)
-    for (int op : {0, 5, 7, 15})
+    // 4a: Bad opcodes (0, 6..15)
+    for (int op : {0, 6, 7, 15})
     {
         NpuTb tb;
         tb.reset();
@@ -1387,6 +1517,7 @@ int main(int argc, char **argv)
     run_gemm_tests(r);
     run_softmax_tests(r);
     run_vec_tests(r);
+    run_lnorm_tests(r);
     run_invalid_command_tests(r);
 
     r.summary("Full Regression");

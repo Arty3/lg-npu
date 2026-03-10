@@ -95,7 +95,8 @@ module npu_cmd_decode
             err_r <= (desc_regs[0][3:0] != OP_CONV) &&
                      (desc_regs[0][3:0] != OP_GEMM) &&
                      (desc_regs[0][3:0] != OP_SOFTMAX) &&
-                     (desc_regs[0][3:0] != OP_VEC);
+                     (desc_regs[0][3:0] != OP_VEC) &&
+                     (desc_regs[0][3:0] != OP_LNORM);
             cmd_r.opcode       <= opcode_e'(desc_regs[0][3:0]);
             cmd_r.act_in_addr  <= desc_regs[1][ADDR_W-1:0];
             cmd_r.act_out_addr <= desc_regs[2][ADDR_W-1:0];

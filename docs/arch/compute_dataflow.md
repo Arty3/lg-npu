@@ -3,7 +3,8 @@
 This document describes the execution model and data movement for the
 lg-npu compute backends: 2D convolution (`rtl/backends/conv/`), general
 matrix multiply (`rtl/backends/gemm/`), softmax (`rtl/backends/softmax/`),
-and element-wise vector operations (`rtl/backends/vec/`).
+element-wise vector operations (`rtl/backends/vec/`), and layer
+normalisation (`rtl/backends/lnorm/`).
 
 All data types are INT8 unless stated otherwise. See
 [overview.md](overview.md) for the full system context.
@@ -350,10 +351,10 @@ stateDiagram-v2
 
 ### Backend Muxing
 
-`npu_core` uses a 2-bit registered backend selector (`be_sel_r`) to mux
-memory port signals between the GEMM, softmax, vec, and convolution backends.
-The selector is set when a command is accepted by the corresponding backend
-and routes all memory request/response signals to the active backend.
+`npu_core` uses a 3-bit registered backend selector (`be_sel_r`) to mux
+memory port signals between the GEMM, softmax, vec, lnorm, and convolution
+backends. The selector is set when a command is accepted by the corresponding
+backend and routes all memory request/response signals to the active backend.
 Only one backend is active at a time (in-order scheduler).
 
 ---
@@ -527,3 +528,115 @@ stateDiagram-v2
 
 Each element takes approximately 3 cycles (read + wait + write), so the
 total cycle count is approximately `3 * N + pipeline overhead`.
+
+---
+
+## LayerNorm Dataflow
+
+The lnorm backend (`rtl/backends/lnorm/`) computes row-wise layer
+normalisation on an M x N input matrix. All data types are INT8. The
+output is INT8 in the range [-128, 127].
+
+Unlike convolution and GEMM, lnorm does not use the PE array, accumulator,
+weight buffer, or bias port. It operates directly on the activation
+buffer through a multi-pass FSM with integrated serial divider and serial
+integer square root.
+
+### LayerNorm Parameters
+
+| Symbol | Meaning |
+|--------|---------|
+| M | Number of independent rows (`num_rows`) |
+| N | Elements per row (`row_len`) |
+| norm_shift | Left-shift applied to (x - mean) before division |
+
+### Algorithm
+
+For each of M rows, three read passes over the N elements plus serial
+division and square root phases:
+
+```
+for row in 0 .. M-1:
+  // Pass 1: Accumulate sum
+  sum = 0
+  for i in 0 .. N-1:
+    sum += input[row * N + i]        // signed INT32
+
+  // Mean division (serial restoring divider, 32 cycles)
+  mean = sum / N                     // integer toward zero
+
+  // Pass 2: Accumulate variance
+  var_sum = 0
+  for i in 0 .. N-1:
+    diff = input[row * N + i] - mean
+    var_sum += abs(diff) * abs(diff)  // unsigned INT32
+
+  // Variance division (serial restoring divider, 32 cycles)
+  variance = var_sum / N
+
+  // Integer square root (serial digit-by-digit, 16 cycles)
+  std = isqrt(variance + 1)          // minimum 1
+
+  // Pass 3: Normalize (serial per element)
+  for i in 0 .. N-1:
+    diff = input[row * N + i] - mean
+    scaled = abs(diff) << norm_shift  // saturate to 32 bits
+    quot = scaled / std               // serial divider, 32 cycles
+    output[row * N + i] = clamp(sign(diff) * quot, -128, 127)
+```
+
+### Serial Restoring Divider
+
+All three division phases (mean, variance, normalize) share a single set
+of divider registers. The divider computes a 32-bit unsigned quotient from
+a 32-bit numerator and denominator over 32 clock cycles, shifting one bit
+per cycle from MSB to LSB. A sign flag restores the correct sign for the
+mean and normalize divisions. Combinational next-value wires allow the
+final quotient to be captured on the same clock edge as the last iteration.
+
+### Serial Integer Square Root
+
+The square root uses the digit-by-digit method, processing 2 bits of the
+32-bit input per iteration over 16 clock cycles to produce a 16-bit result.
+The result is clamped to a minimum of 1 to prevent division by zero.
+
+### Memory Ports
+
+| Port | Used | Purpose |
+|------|------|---------|
+| `act_rd` | Yes | Read input elements (all three passes) |
+| `out_wr` | Yes | Write output elements (normalize pass) |
+| `wt_rd` | No | Tied off |
+| `bias_rd` | No | Tied off |
+
+### FSM States
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+    IDLE --> LOAD_CFG : cmd valid
+    LOAD_CFG --> SUM_RD : parameters latched
+    SUM_RD --> SUM_WAIT : read issued
+    SUM_WAIT --> SUM_RD : more elements
+    SUM_WAIT --> MEAN_DIV : last element
+    MEAN_DIV --> VAR_RD : division complete (32 cycles)
+    VAR_RD --> VAR_WAIT : read issued
+    VAR_WAIT --> VAR_RD : more elements
+    VAR_WAIT --> VAR_DIV : last element
+    VAR_DIV --> SQRT : division complete (32 cycles)
+    SQRT --> NORM_RD : sqrt complete (16 cycles)
+    NORM_RD --> NORM_WAIT : read issued
+    NORM_WAIT --> NORM_DIV : data received
+    NORM_DIV --> NORM_WR : division complete (32 cycles)
+    NORM_WR --> NORM_RD : more elements in row
+    NORM_WR --> SUM_RD : next row
+    NORM_WR --> DONE : last row complete
+    DONE --> IDLE : completion handshake
+```
+
+### Cycle Count
+
+Per row: approximately `4 * N + 35 * N + 80` cycles (two pipelined read
+passes for sum and variance, serial mean/variance divisions and sqrt,
+plus ~35 cycles per element in the normalize pass for reading, dividing,
+and writing). Total for a full operation: `M * (39 * N + 80)`.

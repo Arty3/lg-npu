@@ -1,6 +1,6 @@
 // ============================================================================
-// npu_dispatch.sv - Routes command to GEMM, softmax, vec, or conv backend
-//   GEMM checked first, then softmax, then vec, then convolution (default).
+// npu_dispatch.sv - Routes command to backend by opcode
+//   Priority: GEMM > Softmax > Vec > LayerNorm > Convolution (default).
 // ============================================================================
 
 module npu_dispatch
@@ -27,6 +27,11 @@ module npu_dispatch
     output logic      vec_cmd_valid,
     input  logic      vec_cmd_ready,
 
+    // To lnorm backend
+    output conv_cmd_t lnorm_cmd,
+    output logic      lnorm_cmd_valid,
+    input  logic      lnorm_cmd_ready,
+
     // To conv backend (default)
     output conv_cmd_t conv_cmd,
     output logic      conv_cmd_valid,
@@ -36,12 +41,14 @@ module npu_dispatch
     assign gemm_cmd    = sched_cmd;
     assign softmax_cmd = sched_cmd;
     assign vec_cmd     = sched_cmd;
+    assign lnorm_cmd   = sched_cmd;
     assign conv_cmd    = sched_cmd;
 
     always_comb begin
         gemm_cmd_valid    = 1'b0;
         softmax_cmd_valid = 1'b0;
         vec_cmd_valid     = 1'b0;
+        lnorm_cmd_valid   = 1'b0;
         conv_cmd_valid    = 1'b0;
         sched_ready       = 1'b0;
 
@@ -54,6 +61,9 @@ module npu_dispatch
         end else if (sched_cmd.opcode == OP_VEC) begin
             vec_cmd_valid = sched_valid;
             sched_ready   = vec_cmd_ready;
+        end else if (sched_cmd.opcode == OP_LNORM) begin
+            lnorm_cmd_valid = sched_valid;
+            sched_ready     = lnorm_cmd_ready;
         end else begin
             conv_cmd_valid = sched_valid;
             sched_ready    = conv_cmd_ready;

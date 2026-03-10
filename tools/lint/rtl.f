@@ -62,6 +62,10 @@ rtl/memory/npu_scratchpad.sv
 rtl/backends/vec/vec_ctrl.sv
 rtl/backends/vec/vec_backend.sv
 
+// --- LayerNorm backend ------------------------------------------------------
+rtl/backends/lnorm/lnorm_ctrl.sv
+rtl/backends/lnorm/lnorm_backend.sv
+
 // --- Softmax backend --------------------------------------------------------
 rtl/backends/softmax/softmax_exp_lut.sv
 rtl/backends/softmax/softmax_ctrl.sv

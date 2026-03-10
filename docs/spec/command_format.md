@@ -16,12 +16,13 @@ Source of truth: `include/pkg/npu_cmd_pkg.sv`.
 | `OP_GEMM` | `4'h2` | General matrix multiply (INT8 -> INT32 accumulate -> INT8 output) |
 | `OP_SOFTMAX` | `4'h3` | Row-wise softmax (INT8 -> INT8 output in [0, 127]) |
 | `OP_VEC` | `4'h4` | Element-wise vector operation (ADD or MUL, INT8 -> INT8) |
+| `OP_LNORM` | `4'h5` | Row-wise layer normalisation (INT8 -> INT8) |
 
 All other opcode values are reserved. The hardware rejects reserved opcodes
 by raising the error event (`decode_err`) which sets `IRQ_STATUS.PENDING`,
 discards the command, and returns to idle. See [interrupts.md](interrupts.md).
 
-Dispatch priority: GEMM > Softmax > Vec > Convolution.
+Dispatch priority: GEMM > Softmax > Vec > LayerNorm > Convolution.
 
 ---
 
@@ -123,6 +124,33 @@ right-shift, then saturation to [-128, 127].
 
 The bias port is not used by vec.
 
+### LayerNorm (`OP_LNORM`)
+
+LayerNorm applies per-row normalisation to an M x N matrix. The weight
+buffer and bias port are not used. Unused fields (words 3-4, 7-14) must be
+zero.
+
+| Word | Field (LNorm alias) | Width | Description |
+|------|---------------------|-------|-------------|
+| 0 | `opcode` | 4 bits (LSBs) | `4'h5` |
+| 1 | `in_addr` | 16 bits | Input base address (activation buffer, row-major M x N) |
+| 2 | `out_addr` | 16 bits | Output base address (activation buffer, row-major M x N) |
+| 3-4 | reserved | - | Must be zero |
+| 5 | `num_rows` (M) | 16 bits | Number of independent rows |
+| 6 | `row_len` (N) | 16 bits | Elements per row |
+| 7-14 | reserved | - | Must be zero |
+| 15 | `norm_shift` | 5 bits (bits [4:0]) | Left-shift applied to differences before division (controls output range) |
+
+For each row, the output is computed as:
+
+$$y_i = \text{clamp}\!\left(\frac{(x_i - \mu) \ll \text{norm\_shift}}{\hat{\sigma}},\; -128,\; 127\right)$$
+
+where $\mu = \lfloor \text{sum} / N \rfloor$ (integer division toward zero),
+$\sigma^2 = \lfloor \sum (x_i - \mu)^2 / N \rfloor$, and
+$\hat{\sigma} = \text{isqrt}(\sigma^2 + 1)$ (integer square root, minimum 1).
+
+The weight buffer and bias port are not used by lnorm.
+
 ---
 
 ## Processing Flow
@@ -144,6 +172,8 @@ sequenceDiagram
         NPU->>NPU: softmax_backend executes row-wise softmax
     else OP_VEC
         NPU->>NPU: vec_backend executes element-wise operation
+    else OP_LNORM
+        NPU->>NPU: lnorm_backend executes row-wise layer norm
     end
     NPU-->>Host: Assert IRQ (if enabled)
     Host->>NPU: Read IRQ_STATUS, write IRQ_CLEAR

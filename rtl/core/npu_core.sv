@@ -1,7 +1,7 @@
 // ============================================================================
 // npu_core.sv - Core: scheduler -> dispatch -> backends + memory + completion
-//   Supports GEMM, softmax, vec, and convolution backends.  Only one backend
-//   is active at a time (in-order scheduler).  Memory ports are muxed
+//   Supports GEMM, softmax, vec, lnorm, and convolution backends.  Only one
+//   backend is active at a time (in-order scheduler).  Memory ports are muxed
 //   based on which backend is busy.
 // ============================================================================
 
@@ -55,6 +55,10 @@ module npu_core
     conv_cmd_t vec_be_cmd;
     logic      vec_be_cmd_valid, vec_be_cmd_ready;
 
+    // Dispatch -> LayerNorm backend
+    conv_cmd_t lnorm_be_cmd;
+    logic      lnorm_be_cmd_valid, lnorm_be_cmd_ready;
+
     logic be_done, be_busy;
 
     npu_scheduler u_sched (
@@ -82,6 +86,9 @@ module npu_core
         .vec_cmd           (vec_be_cmd),
         .vec_cmd_valid     (vec_be_cmd_valid),
         .vec_cmd_ready     (vec_be_cmd_ready),
+        .lnorm_cmd         (lnorm_be_cmd),
+        .lnorm_cmd_valid   (lnorm_be_cmd_valid),
+        .lnorm_cmd_ready   (lnorm_be_cmd_ready),
         .conv_cmd          (conv_be_cmd),
         .conv_cmd_valid    (conv_be_cmd_valid),
         .conv_cmd_ready    (conv_be_cmd_ready)
@@ -248,27 +255,67 @@ module npu_core
         .busy           (vec_busy)
     );
 
+    // LayerNorm backend
+    logic [ADDR_W-1:0] lnorm_act_rd_addr, lnorm_wt_rd_addr, lnorm_out_wr_addr;
+    logic [DATA_W-1:0] lnorm_out_wr_data;
+    logic              lnorm_act_rd_req,  lnorm_wt_rd_req,  lnorm_out_wr_req;
+    logic [ADDR_W-1:0] lnorm_bias_addr;
+    logic              lnorm_bias_req;
+    logic              lnorm_done, lnorm_busy;
+
+    lnorm_backend u_lnorm (
+        .clk            (clk),
+        .rst_n          (rst_n),
+        .cmd            (lnorm_be_cmd),
+        .cmd_valid      (lnorm_be_cmd_valid),
+        .cmd_ready      (lnorm_be_cmd_ready),
+        .act_rd_addr    (lnorm_act_rd_addr),
+        .act_rd_req     (lnorm_act_rd_req),
+        .act_rd_gnt     (be_act_rd_gnt),
+        .act_rd_rdata   (be_act_rd_rdata),
+        .act_rd_rvalid  (be_act_rd_rvalid),
+        .wt_rd_addr     (lnorm_wt_rd_addr),
+        .wt_rd_req      (lnorm_wt_rd_req),
+        .wt_rd_gnt      (be_wt_rd_gnt),
+        .wt_rd_rdata    (be_wt_rd_rdata),
+        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .out_wr_addr    (lnorm_out_wr_addr),
+        .out_wr_data    (lnorm_out_wr_data),
+        .out_wr_req     (lnorm_out_wr_req),
+        .out_wr_gnt     (be_out_wr_gnt),
+        .bias_rd_addr   (lnorm_bias_addr),
+        .bias_rd_req    (lnorm_bias_req),
+        .bias_rd_gnt    (be_bias_gnt),
+        .bias_rd_rdata  (be_bias_rdata),
+        .bias_rd_rvalid (be_bias_rvalid),
+        .done           (lnorm_done),
+        .busy           (lnorm_busy)
+    );
+
     // Memory port mux (registered selector avoids combinational loops)
-    // 2'b00 = conv (default), 2'b01 = gemm, 2'b10 = softmax, 2'b11 = vec
-    logic [1:0] be_sel_r;
+    // 3'b000 = conv (default), 3'b001 = gemm, 3'b010 = softmax,
+    // 3'b011 = vec, 3'b100 = lnorm
+    logic [2:0] be_sel_r;
     always_ff @(posedge clk or negedge rst_n)
     begin
         if (!rst_n)
-            be_sel_r <= 2'b00;
+            be_sel_r <= 3'b000;
         else if (gemm_be_cmd_valid && gemm_be_cmd_ready)
-            be_sel_r <= 2'b01;
+            be_sel_r <= 3'b001;
         else if (smax_be_cmd_valid && smax_be_cmd_ready)
-            be_sel_r <= 2'b10;
+            be_sel_r <= 3'b010;
         else if (vec_be_cmd_valid && vec_be_cmd_ready)
-            be_sel_r <= 2'b11;
+            be_sel_r <= 3'b011;
+        else if (lnorm_be_cmd_valid && lnorm_be_cmd_ready)
+            be_sel_r <= 3'b100;
         else if (conv_be_cmd_valid && conv_be_cmd_ready)
-            be_sel_r <= 2'b00;
+            be_sel_r <= 3'b000;
     end
 
     always_comb
     begin
         case (be_sel_r)
-            2'b01: begin
+            3'b001: begin
                 be_act_rd_addr = gemm_act_rd_addr;
                 be_act_rd_req  = gemm_act_rd_req;
                 be_wt_rd_addr  = gemm_wt_rd_addr;
@@ -279,7 +326,7 @@ module npu_core
                 be_bias_addr   = gemm_bias_addr;
                 be_bias_req    = gemm_bias_req;
             end
-            2'b10: begin
+            3'b010: begin
                 be_act_rd_addr = smax_act_rd_addr;
                 be_act_rd_req  = smax_act_rd_req;
                 be_wt_rd_addr  = smax_wt_rd_addr;
@@ -290,7 +337,7 @@ module npu_core
                 be_bias_addr   = smax_bias_addr;
                 be_bias_req    = smax_bias_req;
             end
-            2'b11: begin
+            3'b011: begin
                 be_act_rd_addr = vec_act_rd_addr;
                 be_act_rd_req  = vec_act_rd_req;
                 be_wt_rd_addr  = vec_wt_rd_addr;
@@ -300,6 +347,17 @@ module npu_core
                 be_out_wr_req  = vec_out_wr_req;
                 be_bias_addr   = vec_bias_addr;
                 be_bias_req    = vec_bias_req;
+            end
+            3'b100: begin
+                be_act_rd_addr = lnorm_act_rd_addr;
+                be_act_rd_req  = lnorm_act_rd_req;
+                be_wt_rd_addr  = lnorm_wt_rd_addr;
+                be_wt_rd_req   = lnorm_wt_rd_req;
+                be_out_wr_addr = lnorm_out_wr_addr;
+                be_out_wr_data = lnorm_out_wr_data;
+                be_out_wr_req  = lnorm_out_wr_req;
+                be_bias_addr   = lnorm_bias_addr;
+                be_bias_req    = lnorm_bias_req;
             end
             default: begin
                 be_act_rd_addr = conv_act_rd_addr;
@@ -315,8 +373,8 @@ module npu_core
         endcase
     end
 
-    assign be_done = gemm_done | smax_done | conv_done | vec_done;
-    assign be_busy = gemm_busy | smax_busy | conv_busy | vec_busy;
+    assign be_done = gemm_done | smax_done | conv_done | vec_done | lnorm_done;
+    assign be_busy = gemm_busy | smax_busy | conv_busy | vec_busy | lnorm_busy;
 
     // Memory top
     npu_mem_top u_mem (
