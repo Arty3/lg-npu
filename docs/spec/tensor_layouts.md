@@ -1,59 +1,125 @@
 # Tensor Layouts
 
-This document describes the tensor data layout used by the NPU.
+This document describes the tensor layout policy for the NPU: which
+layouts exist, which one the hardware uses, and how the runtime converts
+between them.
 
-Source of truth: `include/pkg/npu_tensor_pkg.sv`.
-
----
-
-## Supported Layouts
-
-| Enum | Value | Description |
-|------|-------|-------------|
-| `LAYOUT_NHWC` | `2'b00` | N-Height-Width-Channel (channel-last) |
-
-v0.1 supports **NHWC only**. Attempting any other layout is undefined.
+Sources of truth:
+- Hardware: `include/pkg/npu_tensor_pkg.sv`
+- Runtime API: `sw/uapi/npu_tensor.h`
+- Runtime implementation: `sw/runtime/tensor_desc.c`
 
 ---
 
-## NHWC Memory Order
+## Canonical Internal Layout
 
-Elements are stored in row-major order with channels varying fastest:
+The NPU hardware operates exclusively in **NHWC** (channel-last).
+Every byte stored in device SRAM follows NHWC ordering.  No layout
+field is carried in the hardware command descriptor; the backends
+always interpret addresses as NHWC.
 
+```math
+\text{addr}(n, h, w, c) = \text{base} + \bigl((n \cdot H + h) \cdot W + w\bigr) \cdot C + c
 ```
-for n in 0..N-1:
-  for h in 0..H-1:
-    for w in 0..W-1:
-      for c in 0..C-1:
-        mem[base + ((n*H + h)*W + w)*C + c] = tensor[n][h][w][c]
+
+This decision is fixed: all address generators, PE arrays, and buffer
+routers assume NHWC.
+
+---
+
+## Supported External Layouts
+
+The runtime API (`sw/uapi/npu_tensor.h`) accepts the following layouts
+and converts them to NHWC before loading data into device SRAM.
+
+| Enum | Value | Memory order | Stride (innermost to outermost) |
+|------|-------|--------------|---------------------------------|
+| `NPU_LAYOUT_NHWC` | 0 | N, H, W, **C** | 1, W\*C, C, H\*W\*C |
+| `NPU_LAYOUT_NCHW` | 1 | N, **C**, H, W | 1, W, H\*W, C\*H\*W |
+
+When `layout == NPU_LAYOUT_NHWC` the data is already in canonical form
+and is copied unchanged.
+
+---
+
+## Conversion Rules
+
+The runtime normalizes external layouts to NHWC on the host before any
+DMA or MMIO transfer to the device.
+
+### NCHW to NHWC
+
+```math
+\text{src}_{idx} = \bigl((n \cdot C + c) \cdot H + h\bigr) \cdot W + w
 ```
 
-### Linear Address Formula
+```math
+\text{dst}_{idx} = \bigl((n \cdot H + h) \cdot W + w\bigr) \cdot C + c
+```
 
-$$
-\text{addr} = \text{base} + \bigl((n \cdot H + h) \cdot W + w\bigr) \cdot C + c
-$$
+```mermaid
+flowchart LR
+    subgraph Host
+        EXT["Tensor (NCHW)"]
+        CVT["npu_tensor_convert_to_nhwc()"]
+        CAN["Tensor (NHWC)"]
+        EXT --> CVT --> CAN
+    end
+    CAN -- "MMIO / DMA" --> SRAM["Device SRAM (NHWC)"]
+```
+
+This is a pure element permutation with no arithmetic (values are not
+modified, only reordered).  For INT8 tensors the cost is one byte copy
+per element.
+
+### NHWC to NHWC
+
+Identity (`memcpy`).
+
+---
+
+## Validation Rules
+
+`npu_tensor_validate()` enforces the following constraints on every
+tensor descriptor before conversion or submission:
+
+| Check | Error code | Description |
+|-------|-----------|-------------|
+| Non-null pointer | `NPU_TENSOR_ERR_NULL_PTR` | Descriptor pointer must not be NULL. |
+| Positive dimensions | `NPU_TENSOR_ERR_ZERO_DIM` | N, H, W, C must all be > 0. |
+| Batch == 1 | `NPU_TENSOR_ERR_BATCH_UNSUP` | v0.1 only supports batch size 1. |
+| Known layout | `NPU_TENSOR_ERR_LAYOUT_UNKNOWN` | Layout must be < `NPU_LAYOUT_COUNT`. |
+| No overflow | `NPU_TENSOR_ERR_OVERFLOW` | H\*W\*C must fit in uint32\_t. |
+
+Buffer-size checks (`NPU_TENSOR_ERR_BUF_TOO_SMALL`) are performed at
+conversion time when the caller provides a buffer length.
 
 ---
 
 ## Tensor Descriptor
 
-The `tensor_desc_t` struct carries metadata for a tensor:
+The `npu_tensor_desc` struct carries metadata for one tensor.
+Dimensions always use the NHWC naming convention irrespective of the
+declared layout.
 
-| Field | Width | Description |
-|-------|-------|-------------|
-| `base_addr` | `ADDR_W` (16) | SRAM byte address of element [0][0][0][0] |
-| `dim_n` | `DIM_W` (16) | Batch dimension (v0.1: always 1) |
-| `dim_h` | `DIM_W` (16) | Height |
-| `dim_w` | `DIM_W` (16) | Width |
-| `dim_c` | `DIM_W` (16) | Channel count |
-| `layout` | 2 | `tensor_layout_e` (must be `LAYOUT_NHWC`) |
+| C field | SV field | Width | Description |
+|---------|----------|-------|-------------|
+| `base_addr` | `base_addr` | 16 bits | SRAM byte address of element \[0\]\[0\]\[0\]\[0\] |
+| `dim_n` | `dim_n` | 16 bits | Batch (must be 1) |
+| `dim_h` | `dim_h` | 16 bits | Height (or rows) |
+| `dim_w` | `dim_w` | 16 bits | Width (or columns) |
+| `dim_c` | `dim_c` | 16 bits | Channels |
+| `layout` | `layout` | 2 bits | `tensor_layout_e` / `enum npu_tensor_layout` |
+| `dtype` | - | 3 bits | `enum npu_dtype` (C only; SV uses `dtype_e` from `npu_types_pkg`) |
+
+The SV-side `tensor_desc_t` is defined in `npu_tensor_pkg.sv`.
+The C-side `struct npu_tensor_desc` is defined in `sw/uapi/npu_tensor.h`.
 
 ---
 
 ## Data Types
 
-| Tensor | Element Type | Width |
+| Tensor | Element type | Width |
 |--------|-------------|-------|
 | Input activations | INT8 | 8 bits |
 | Weights | INT8 | 8 bits |
@@ -62,3 +128,20 @@ The `tensor_desc_t` struct carries metadata for a tensor:
 | Output activations | INT8 | 8 bits (after quantisation) |
 
 All INT8 values are **signed** two's-complement.
+
+---
+
+## Weight Tensors
+
+Convolution weight tensors have four dimensions: K (output channels),
+R (filter height), S (filter width), C (input channels).  The same
+layout policy applies:
+
+| Software layout | NHWC mapping | Memory order |
+|-----------------|-------------|--------------|
+| KRSC (NHWC-style) | N=K, H=R, W=S, C=C | `((k*R + r)*S + s)*C + c` |
+| KCRS (NCHW-style) | N=K, H=R, W=S, C=C | `((k*C + c)*R + r)*S + s` |
+
+The caller maps weight dimensions onto the N/H/W/C descriptor fields
+and sets the layout accordingly.  The runtime conversion is the same
+NCHW-to-NHWC permutation.

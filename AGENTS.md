@@ -55,6 +55,27 @@ typedef enum logic [1:0]
 - Avoid overusing UTF-8 characters in comments, prefer ASCII.
 - File banners must have a new line in between them and the file contents.
 - When working in sw/ always use the sw/shared/annotations.h header file, use its features as much as possible.
+- In C/C++ write pointers as `void* ptr` rather than `void *ptr`
+- For one line bodies in C/C++, avoid curly braces, e.g.:
+```c
+// Bad
+if (!buf)
+{
+    return NULL;
+}
+
+while (1)
+{
+	func();
+}
+
+// Good
+if (!buf)
+    return NULL;
+
+while (1)
+	func();
+```
 
 ## Verifications
 

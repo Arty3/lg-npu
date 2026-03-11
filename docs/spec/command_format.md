@@ -32,6 +32,11 @@ Dispatch priority: GEMM > Softmax > Vec > LayerNorm > Pool > Convolution.
 All opcodes share the same 16-word descriptor structure.
 Fields that are unused by a given opcode should be written as zero.
 
+All tensor data referenced by a command must already be in NHWC
+(channel-last) order in device SRAM.  The runtime converts external
+layouts to NHWC before loading data.  See [tensor_layouts.md](tensor_layouts.md)
+for the full layout policy and conversion rules.
+
 ### Convolution (`OP_CONV`)
 
 | Word | Field | Width | Description |
