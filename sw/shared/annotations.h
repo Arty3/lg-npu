@@ -28,7 +28,8 @@
 #define __ANNOTATIONS_H_
 
 #if !defined(ANNOTATIONS_REDEFINE)
-#define ANNOTATIONS_REDEFINE 0
+/* Flipped for this project (opt-in) */
+#define ANNOTATIONS_REDEFINE 1
 #endif
 
 #if (ANNOTATIONS_REDEFINE + 0)

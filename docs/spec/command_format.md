@@ -255,3 +255,47 @@ Matrices are stored in row-major order in local SRAM:
 - **Bias** (length N) in the weight buffer: element bias\[n\] at byte offset `bias_addr + n`.
 
 The output element count equals `M * N`.
+
+---
+
+## Runtime Builder API
+
+The runtime provides typed builder functions that pack parameter structs
+into 16-word descriptors. Each builder zeroes the descriptor, writes the
+opcode into word 0, and fills the remaining fields at the positions
+defined above.
+
+Sources of truth:
+- Declarations: `sw/uapi/lgnpu_cmd.h`
+- Implementation: `sw/runtime/command_builder.c`
+
+All builders return `int`: `0` on success, `-1` on `NULL` arguments.
+
+| Builder | Parameter struct | Opcode |
+|---------|-----------------|--------|
+| `npu_cmd_build_conv` | `struct npu_conv_params` | `LGNPU_OP_CONV` |
+| `npu_cmd_build_gemm` | `struct npu_gemm_params` | `LGNPU_OP_GEMM` |
+| `npu_cmd_build_softmax` | `struct npu_softmax_params` | `LGNPU_OP_SOFTMAX` |
+| `npu_cmd_build_vec` | `struct npu_vec_params` | `LGNPU_OP_VEC` |
+| `npu_cmd_build_lnorm` | `struct npu_lnorm_params` | `LGNPU_OP_LNORM` |
+| `npu_cmd_build_pool` | `struct npu_pool_params` | `LGNPU_OP_POOL` |
+
+Example usage:
+
+```c
+struct npu_cmd_desc desc;
+struct npu_conv_params p = {
+    .act_in_addr  = 0x0000, .act_out_addr = 0x0400,
+    .weight_addr  = 0x0000, .bias_addr    = 0x1000,
+    .in_h = 8, .in_w = 8, .in_c = 3, .out_k = 16,
+    .filt_r = 3, .filt_s = 3,
+    .stride_h = 1, .stride_w = 1,
+    .pad_h = 1, .pad_w = 1,
+    .quant_shift = 7, .act_mode = 1, /* ReLU */
+};
+
+if (npu_cmd_build_conv(&desc, &p) < 0)
+    /* handle error */;
+
+npu_submit(&dev, &desc);
+```

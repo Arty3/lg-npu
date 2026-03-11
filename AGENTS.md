@@ -56,6 +56,12 @@ typedef enum logic [1:0]
 - File banners must have a new line in between them and the file contents.
 - When working in sw/ always use the sw/shared/annotations.h header file, use its features as much as possible.
 - In C/C++ write pointers as `void* ptr` rather than `void *ptr`
+- In C, do not use `stdbool.h`, instead use `int`.
+- Apply `const`, `static`, etc. as much as possible, C code should be as explicit as can be.
+- When writing comments in C, prefer `/**/` syntax over `//`.
+- Prefer `!var` over `var == 0` on simple checks, complex checks like `strcmp` should stay as `strcmp(a, b) == 0`.
+- In C, when a function takes no arguments you should specify this with void: `void f(void);`
+- For C/C++, all source files must include the necessary headers even if their respective header already includes them. (e.g. `#include <string.h>` when their respective header already includes it.)
 - For one line bodies in C/C++, avoid curly braces, e.g.:
 ```c
 // Bad
@@ -75,6 +81,28 @@ if (!buf)
 
 while (1)
 	func();
+```
+- When using annotations.h, you should define functions with this style (annotations on top, definition below):
+```c
+NO_DISCARD ALWAYS_INLINE
+static size_t my_func(void);
+```
+- In C/C++ headers are to be protected with the convention:
+```c
+#ifndef _HEADER_NAME_H
+#define _HEADER_NAME_H
+
+#endif /* _HEADER_NAME_H */
+```
+- Prefer for loops over while loops:
+```c
+// Bad
+while (cond)
+	...
+
+// Good
+for (; cond ;)
+	...
 ```
 
 ## Verifications

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Use sv2v + Yosys + netlistsvg to generate a top-level block diagram of npu_shell.
+
+"""
+Use sv2v + Yosys + netlistsvg to generate a top-level block diagram of npu_shell.
 
 Produces a single SVG via netlistsvg (digital-logic style), showing only
 the first level of hierarchy (sub-module boxes and their inter-connections)
@@ -8,12 +10,12 @@ without descending into child module internals.
 Requires: sv2v, yosys, netlistsvg (npm install -g netlistsvg).
 """
 
+import subprocess
 import argparse
+import tempfile
 import pathlib
 import shutil
-import subprocess
 import sys
-import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RTL_F = REPO_ROOT / "tools" / "lint" / "rtl.f"

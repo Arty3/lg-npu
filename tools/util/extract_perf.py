@@ -12,6 +12,7 @@ and prints a summary table (or CSV with --csv).
 """
 
 from pathlib import Path
+
 import argparse
 import sys
 import re

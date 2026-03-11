@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Generate exp LUT values for softmax_exp_lut.sv"""
+
+"""
+Generate exp LUT values for softmax_exp_lut.sv
+"""
+
 import math
 
 print("// exp_int table: round(65535 * exp(-k)) for k=0..7")

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+
 # ============================================================================
-# open_surfer.sh – Launch Surfer waveform viewer on simulation traces
+# open_surfer.sh - Launch Surfer waveform viewer on simulation traces
 #
 # Usage:
 #   bash tools/visualize/open_surfer.sh [path/to/file.vcd|.fst]
@@ -8,6 +9,7 @@
 # If no argument is given, opens the most recent .vcd or .fst file
 # found in sim/waves/.
 # ============================================================================
+
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

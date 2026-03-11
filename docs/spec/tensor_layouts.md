@@ -34,10 +34,10 @@ and converts them to NHWC before loading data into device SRAM.
 
 | Enum | Value | Memory order | Stride (innermost to outermost) |
 |------|-------|--------------|---------------------------------|
-| `NPU_LAYOUT_NHWC` | 0 | N, H, W, **C** | 1, W\*C, C, H\*W\*C |
-| `NPU_LAYOUT_NCHW` | 1 | N, **C**, H, W | 1, W, H\*W, C\*H\*W |
+| `LGNPU_LAYOUT_NHWC` | 0 | N, H, W, **C** | 1, W\*C, C, H\*W\*C |
+| `LGNPU_LAYOUT_NCHW` | 1 | N, **C**, H, W | 1, W, H\*W, C\*H\*W |
 
-When `layout == NPU_LAYOUT_NHWC` the data is already in canonical form
+When `layout == LGNPU_LAYOUT_NHWC` the data is already in canonical form
 and is copied unchanged.
 
 ---
@@ -85,14 +85,16 @@ tensor descriptor before conversion or submission:
 
 | Check | Error code | Description |
 |-------|-----------|-------------|
-| Non-null pointer | `NPU_TENSOR_ERR_NULL_PTR` | Descriptor pointer must not be NULL. |
-| Positive dimensions | `NPU_TENSOR_ERR_ZERO_DIM` | N, H, W, C must all be > 0. |
-| Batch == 1 | `NPU_TENSOR_ERR_BATCH_UNSUP` | v0.1 only supports batch size 1. |
-| Known layout | `NPU_TENSOR_ERR_LAYOUT_UNKNOWN` | Layout must be < `NPU_LAYOUT_COUNT`. |
-| No overflow | `NPU_TENSOR_ERR_OVERFLOW` | H\*W\*C must fit in uint32\_t. |
+| Non-null pointer | `LGNPU_TENSOR_ERR_NULL_PTR` | Descriptor pointer must not be NULL. |
+| Positive dimensions | `LGNPU_TENSOR_ERR_ZERO_DIM` | N, H, W, C must all be > 0. |
+| Batch == 1 | `LGNPU_TENSOR_ERR_BATCH_UNSUP` | v0.1 only supports batch size 1. |
+| Known layout | `LGNPU_TENSOR_ERR_LAYOUT_UNKNOWN` | Layout must be < `LGNPU_LAYOUT_COUNT`. |
+| No overflow | `LGNPU_TENSOR_ERR_OVERFLOW` | H\*W\*C must fit in uint32\_t. |
 
-Buffer-size checks (`NPU_TENSOR_ERR_BUF_TOO_SMALL`) are performed at
-conversion time when the caller provides a buffer length.
+`npu_tensor_convert_to_nhwc()` additionally checks `dst` and `src`
+for NULL (returning `LGNPU_TENSOR_ERR_NULL_PTR`) and verifies
+`buf_bytes >= byte_size` (returning `LGNPU_TENSOR_ERR_BUF_TOO_SMALL`)
+before performing the conversion.
 
 ---
 

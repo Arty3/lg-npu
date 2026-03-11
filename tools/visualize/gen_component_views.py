@@ -6,12 +6,12 @@ Produces one SVG per component via netlistsvg (digital-logic style).
 Requires: sv2v, yosys, netlistsvg (npm install -g netlistsvg).
 """
 
+import subprocess
 import argparse
+import tempfile
 import pathlib
 import shutil
-import subprocess
 import sys
-import tempfile
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RTL_F = REPO_ROOT / "tools" / "lint" / "rtl.f"

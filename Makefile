@@ -10,6 +10,27 @@ WAVE_DIR  := sim/waves
 VERILATOR := verilator
 PYTHON    := python3
 
+CC       := gcc
+SW_STD   := -std=c17
+SW_WARN  := -Wall -Wextra -Wpedantic -Werror \
+            -Wcast-align -Wcast-qual -Wconversion -Wdouble-promotion \
+            -Wfloat-equal -Wformat=2 -Wformat-nonliteral -Wformat-security \
+            -Wimplicit-fallthrough -Wmissing-declarations \
+            -Wmissing-field-initializers -Wnull-dereference -Wpacked \
+            -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-conversion \
+            -Wstrict-overflow=5 -Wswitch-default -Wswitch-enum -Wundef \
+            -Wuninitialized -Wunreachable-code -Wunused -Wvla -Wwrite-strings
+SW_OPT   := -Ofast -flto
+SW_FLAGS := $(SW_STD) $(SW_WARN) $(SW_OPT)
+SW_PIC   := -fPIC -fvisibility=hidden
+SW_BUILD := sw/build
+
+SW_RUNTIME_SRC := sw/runtime/command_builder.c \
+                  sw/runtime/submit.c \
+                  sw/runtime/liblgnpu.c \
+                  sw/runtime/tensor_desc.c
+SW_RUNTIME_OBJ := $(patsubst sw/runtime/%.c,$(SW_BUILD)/%.o,$(SW_RUNTIME_SRC))
+
 # Common verilator flags
 VFLAGS := --sv --cc --exe --build \
           --top-module $(TOP) \
@@ -126,9 +147,26 @@ viz: ## Generate architecture diagrams into docs/diagrams/
 waves: ## Open latest waveform in Surfer viewer
 	bash tools/visualize/open_surfer.sh
 
+# SW build targets
+$(SW_BUILD):
+	mkdir -p $(SW_BUILD)
+
+.PHONY: sw-check
+sw-check: ## Syntax-check all SW runtime sources (C23)
+	$(CC) $(SW_FLAGS) -fsyntax-only $(SW_RUNTIME_SRC)
+
+.PHONY: sw-build
+sw-build: $(SW_BUILD) ## Compile SW runtime into .a and .so (C23)
+	@for src in $(SW_RUNTIME_SRC); do \
+		obj=$(SW_BUILD)/$$(basename $${src} .c).o; \
+		$(CC) $(SW_FLAGS) $(SW_PIC) -c $$src -o $$obj; \
+	done
+	ar rcs $(SW_BUILD)/liblgnpu_rt.a $(SW_RUNTIME_OBJ)
+	$(CC) $(SW_FLAGS) -shared -o $(SW_BUILD)/liblgnpu_rt.so $(SW_RUNTIME_OBJ)
+
 .PHONY: clean
 clean: ## Remove all build artifacts
-	rm -rf $(SIM_BUILD) obj_dir
+	rm -rf $(SIM_BUILD) $(SW_BUILD) obj_dir
 	rm -f sim/waves/*.vcd sim/waves/*.fst
 
 .PHONY: clean-all

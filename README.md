@@ -91,7 +91,10 @@ These documents correspond closely with the main project components:
 | `rtl/` | Hardware implementation of the NPU. |
 | `tb/` | Verification testbenches and simulation infrastructure. |
 | `model/` | Reference software models used for validation. |
-| `sw/` | Driver and runtime interface for the NPU. |
+| `sw/uapi/` | Public C headers (device context, commands, tensors, registers). |
+| `sw/runtime/` | Runtime library: MMIO, IRQ, DMA, command builders, tensor conversion. |
+| `sw/driver/` | Kernel-level driver stubs (future). |
+| `sw/shared/` | Cross-platform annotation macros (`annotations.h`). |
 | `fpga/` | FPGA integration and board support. |
 | `asic/` | ASIC synthesis, layout, and sign-off flow. |
 | `tools/` | Linting, formatting, code generation, and utility scripts. |
@@ -117,6 +120,8 @@ make compile           # Verilate -> C++ model
 make compile-full-tests # Build full regression binary
 make sim-smoke         # Smoke regression (conv + control + perf)
 make sim-full          # Full regression (all test suites)
+make sw-check          # Syntax-check runtime C sources (-fsyntax-only)
+make sw-build          # Build liblgnpu_rt.a and liblgnpu_rt.so
 make vectors           # Generate test vectors from Python models
 make format            # Auto-format SV / shell / Python
 make gen               # Regenerate SV packages + C headers

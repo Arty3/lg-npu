@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+
 # ============================================================================
 # Generate all architecture diagrams into docs/diagrams/ using
 # sv2v (SV->Verilog) + Yosys (elaboration) + netlistsvg (rendering).
 #
 # Prerequisites: sv2v, yosys, netlistsvg (npm install -g netlistsvg)
 # ============================================================================
+
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
