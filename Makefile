@@ -3,9 +3,10 @@
 REPO_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 FILELIST  := tools/lint/rtl.f
 TOP       := npu_shell
-SIM_BUILD := sim/build
-VEC_DIR   := tb/vectors
-WAVE_DIR  := sim/waves
+SIM_BUILD   := sim/build
+SYNTH_BUILD := syn/build
+VEC_DIR     := tb/vectors
+WAVE_DIR    := sim/waves
 
 VERILATOR := verilator
 PYTHON    := python3
@@ -164,9 +165,18 @@ sw-build: $(SW_BUILD) ## Compile SW runtime into .a and .so (C23)
 	ar rcs $(SW_BUILD)/liblgnpu_rt.a $(SW_RUNTIME_OBJ)
 	$(CC) $(SW_FLAGS) -shared -o $(SW_BUILD)/liblgnpu_rt.so $(SW_RUNTIME_OBJ)
 
+.PHONY: synth-yosys
+synth-yosys: ## Run Yosys generic synthesis to catch structural issues
+	@mkdir -p $(SYNTH_BUILD)
+	sv2v -Iinclude -Iinclude/pkg -Iinclude/defines \
+		$$(grep '\.sv$$' $(FILELIST)) > $(SYNTH_BUILD)/design.v
+	yosys -l $(SYNTH_BUILD)/synth.log -p 'read_verilog $(SYNTH_BUILD)/design.v; hierarchy -top $(TOP) -check; proc; opt; check -assert; synth -top $(TOP); stat'
+	@echo ""
+	@echo "=== synth-yosys: log at $(SYNTH_BUILD)/synth.log ==="
+
 .PHONY: clean
 clean: ## Remove all build artifacts
-	rm -rf $(SIM_BUILD) $(SW_BUILD) obj_dir
+	rm -rf $(SIM_BUILD) $(SYNTH_BUILD) $(SW_BUILD) obj_dir
 	rm -f sim/waves/*.vcd sim/waves/*.fst
 
 .PHONY: clean-all
