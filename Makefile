@@ -25,6 +25,7 @@ SW_OPT   := -Ofast -flto
 SW_FLAGS := $(SW_STD) $(SW_WARN) $(SW_OPT)
 SW_PIC   := -fPIC -fvisibility=hidden
 SW_BUILD := sw/build
+SW_TEST_BUILD := sw/build/tests
 
 SW_RUNTIME_SRC := sw/runtime/command_builder.c \
                   sw/runtime/submit.c \
@@ -174,9 +175,67 @@ synth-yosys: ## Run Yosys generic synthesis to catch structural issues
 	@echo ""
 	@echo "=== synth-yosys: log at $(SYNTH_BUILD)/synth.log ==="
 
+# SW test targets
+SW_TEST_FLAGS := $(SW_STD) $(SW_WARN) -Ofast -Wno-unused-function
+
+$(SW_TEST_BUILD):
+	mkdir -p $(SW_TEST_BUILD)
+
+.PHONY: sw-test-tensor
+sw-test-tensor: $(SW_TEST_BUILD) ## Run tensor validation tests
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_tensor \
+		sw/tests/tensor/test_tensor.c \
+		sw/runtime/tensor_desc.c
+	$(SW_TEST_BUILD)/test_tensor
+
+.PHONY: sw-test-layout
+sw-test-layout: $(SW_TEST_BUILD) ## Run layout conversion tests
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_layout \
+		sw/tests/layout/test_layout.c \
+		sw/runtime/tensor_desc.c
+	$(SW_TEST_BUILD)/test_layout
+
+.PHONY: sw-test-command
+sw-test-command: $(SW_TEST_BUILD) ## Run command construction tests
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_command \
+		sw/tests/command/test_command.c \
+		sw/runtime/command_builder.c
+	$(SW_TEST_BUILD)/test_command
+
+.PHONY: sw-test-device
+sw-test-device: $(SW_TEST_BUILD) ## Run device control tests (mock backend)
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_device \
+		sw/tests/device/test_device.c \
+		sw/runtime/liblgnpu.c \
+		sw/runtime/submit.c
+	$(SW_TEST_BUILD)/test_device
+
+.PHONY: sw-test-dma
+sw-test-dma: $(SW_TEST_BUILD) ## Run DMA operation tests (mock backend)
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_dma \
+		sw/tests/runtime/test_dma.c \
+		sw/runtime/liblgnpu.c \
+		sw/runtime/submit.c
+	$(SW_TEST_BUILD)/test_dma
+
+.PHONY: sw-test-integration
+sw-test-integration: $(SW_TEST_BUILD) ## Run integration tests (mock backend)
+	$(CC) $(SW_TEST_FLAGS) -o $(SW_TEST_BUILD)/test_integration \
+		sw/tests/integration/test_integration.c \
+		sw/runtime/command_builder.c \
+		sw/runtime/liblgnpu.c \
+		sw/runtime/submit.c \
+		sw/runtime/tensor_desc.c
+	$(SW_TEST_BUILD)/test_integration
+
+.PHONY: sw-test
+sw-test: sw-test-tensor sw-test-layout sw-test-command sw-test-device sw-test-dma sw-test-integration ## Run all SW runtime tests
+	@echo ""
+	@echo "=== sw-test: ALL SUITES PASSED ==="
+
 .PHONY: clean
 clean: ## Remove all build artifacts
-	rm -rf $(SIM_BUILD) $(SYNTH_BUILD) $(SW_BUILD) obj_dir
+	rm -rf $(SIM_BUILD) $(SYNTH_BUILD) $(SW_BUILD) $(SW_TEST_BUILD) obj_dir
 	rm -f sim/waves/*.vcd sim/waves/*.fst
 
 .PHONY: clean-all
