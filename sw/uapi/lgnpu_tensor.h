@@ -66,7 +66,7 @@ enum npu_tensor_err
 /* Validate a tensor descriptor.
  * Checks: non-null, positive dimensions, batch == 1, known layout,
  * and that N*H*W*C does not overflow a uint32_t. */
-API_CALL
+NO_DISCARD API_CALL
 enum npu_tensor_err npu_tensor_validate(const struct npu_tensor_desc* desc);
 
 /* Total number of elements (N * H * W * C).
@@ -112,7 +112,7 @@ static size_t npu_tensor_nhwc_offset(
  *
  * If desc->layout is already NHWC the data is copied unchanged.
  * Returns LGNPU_TENSOR_OK on success. */
-API_CALL
+NO_DISCARD API_CALL
 enum npu_tensor_err npu_tensor_convert_to_nhwc(
 	void*        RESTRICT         dst,
 	const void*  RESTRICT         src,

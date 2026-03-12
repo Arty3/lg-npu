@@ -61,61 +61,61 @@ struct npu_device_info
 };
 
 /* Device lifecycle */
-NO_INLINE COLD_CALL API_CALL
+NO_DISCARD NO_INLINE COLD_CALL API_CALL
 int npu_open(struct npu_device* dev, volatile void* mmio_base);
 
-NO_INLINE COLD_CALL API_CALL
+NO_DISCARD NO_INLINE COLD_CALL API_CALL
 int npu_close(struct npu_device* dev);
 
 /* Control */
-API_CALL
+NO_DISCARD API_CALL
 int npu_reset(struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_enable(struct npu_device* dev);
 
 /* Status queries */
-API_CALL
+NO_DISCARD API_CALL
 int npu_read_status(const struct npu_device* dev, struct npu_status* out);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_read_info(const struct npu_device* dev, struct npu_device_info* out);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_poll_idle(const struct npu_device* dev, uint32_t timeout_cycles);
 
 /* IRQ management */
-API_CALL
+NO_DISCARD API_CALL
 int npu_irq_enable(struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_irq_disable(struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_irq_clear(struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_irq_pending(const struct npu_device* dev);
 
 /* Performance counters */
-API_CALL
+NO_DISCARD API_CALL
 uint32_t npu_perf_read_cycles(const struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 uint32_t npu_perf_read_active(const struct npu_device* dev);
 
-API_CALL
+NO_DISCARD API_CALL
 uint32_t npu_perf_read_stall(const struct npu_device* dev);
 
 /* Command submission */
-API_CALL
+NO_DISCARD API_CALL
 int npu_submit(struct npu_device* dev, const struct npu_cmd_desc* desc);
 
 /* DMA */
-API_CALL
+NO_DISCARD API_CALL
 int npu_dma_start(struct npu_device* dev, const struct npu_dma_req* req);
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_dma_poll(const struct npu_device* dev, uint32_t timeout_cycles);
 
 #endif /* _LGNPU_IOCTL_H */

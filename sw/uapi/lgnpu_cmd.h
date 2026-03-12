@@ -144,37 +144,37 @@ struct npu_pool_params
  * Each zeroes the descriptor, sets the opcode, and packs the
  * parameter fields into the correct word positions. */
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_conv(
 	struct npu_cmd_desc*          desc,
 	const struct npu_conv_params* p
 );
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_gemm(
 	struct npu_cmd_desc*          desc,
 	const struct npu_gemm_params* p
 );
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_softmax(
 	struct npu_cmd_desc*             desc,
 	const struct npu_softmax_params* p
 );
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_vec(
 	struct npu_cmd_desc*         desc,
 	const struct npu_vec_params* p
 );
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_lnorm(
 	struct npu_cmd_desc*           desc,
 	const struct npu_lnorm_params* p
 );
 
-API_CALL
+NO_DISCARD API_CALL
 int npu_cmd_build_pool(
 	struct npu_cmd_desc*          desc,
 	const struct npu_pool_params* p
