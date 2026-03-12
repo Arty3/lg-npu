@@ -20,31 +20,31 @@
  * Holds the MMIO base pointer used by all operations. */
 struct npu_device
 {
-	volatile uint32_t* base;
+    volatile uint32_t* base;
 };
 
 /* DMA transfer direction. */
 enum npu_dma_dir
 {
-	LGNPU_DMA_TO_DEVICE   = 0,  /* external -> local SRAM */
-	LGNPU_DMA_FROM_DEVICE = 1,  /* local SRAM -> external */
+    LGNPU_DMA_TO_DEVICE   = 0,  /* external -> local SRAM */
+    LGNPU_DMA_FROM_DEVICE = 1,  /* local SRAM -> external */
 };
 
 /* DMA transfer request. */
 struct npu_dma_req
 {
-	uint32_t         ext_addr;  /* external (host-side) byte address */
-	uint16_t         loc_addr;  /* local SRAM byte address */
-	uint16_t         len;       /* transfer length in bytes */
-	enum npu_dma_dir dir;
+    uint32_t         ext_addr;  /* external (host-side) byte address */
+    uint16_t         loc_addr;  /* local SRAM byte address */
+    uint16_t         len;       /* transfer length in bytes */
+    enum npu_dma_dir dir;
 };
 
 /* Snapshot of the STATUS register. */
 struct npu_status
 {
-	int idle;
-	int busy;
-	int queue_full;
+    int idle;
+    int busy;
+    int queue_full;
 };
 
 /* Decoded FEATURE_ID register.
@@ -52,12 +52,12 @@ struct npu_status
  *             [11:8] array rows, [7:4] array cols, [3:0] dtypes. */
 struct npu_device_info
 {
-	uint8_t version_major;
-	uint8_t version_minor;
-	uint8_t num_backends;
-	uint8_t array_rows;
-	uint8_t array_cols;
-	uint8_t dtypes_supported;
+    uint8_t version_major;
+    uint8_t version_minor;
+    uint8_t num_backends;
+    uint8_t array_rows;
+    uint8_t array_cols;
+    uint8_t dtypes_supported;
 };
 
 /* Device lifecycle */

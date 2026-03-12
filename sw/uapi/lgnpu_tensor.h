@@ -11,7 +11,7 @@
 /* Tensor element data type. */
 enum npu_dtype
 {
-	LGNPU_DTYPE_INT8 = 0,
+    LGNPU_DTYPE_INT8 = 0,
 };
 
 /* Tensor memory layout.
@@ -26,9 +26,9 @@ enum npu_dtype
  *   NCHW  - common framework default (PyTorch, etc.) */
 enum npu_tensor_layout
 {
-	LGNPU_LAYOUT_NHWC  = 0,
-	LGNPU_LAYOUT_NCHW  = 1,
-	LGNPU_LAYOUT_COUNT
+    LGNPU_LAYOUT_NHWC  = 0,
+    LGNPU_LAYOUT_NCHW  = 1,
+    LGNPU_LAYOUT_COUNT
 };
 
 /* Tensor descriptor.
@@ -42,25 +42,25 @@ enum npu_tensor_layout
  *   dim_c  - channels    (innermost in NHWC) */
 struct npu_tensor_desc
 {
-	uint16_t                base_addr;
-	uint16_t                dim_n;
-	uint16_t                dim_h;
-	uint16_t                dim_w;
-	uint16_t                dim_c;
-	enum npu_tensor_layout  layout;
-	enum npu_dtype          dtype;
+    uint16_t                base_addr;
+    uint16_t                dim_n;
+    uint16_t                dim_h;
+    uint16_t                dim_w;
+    uint16_t                dim_c;
+    enum npu_tensor_layout  layout;
+    enum npu_dtype          dtype;
 };
 
 /* Validation error codes returned by npu_tensor_validate(). */
 enum npu_tensor_err
 {
-	LGNPU_TENSOR_OK                 = 0,
-	LGNPU_TENSOR_ERR_NULL_PTR       = 1,
-	LGNPU_TENSOR_ERR_ZERO_DIM       = 2,
-	LGNPU_TENSOR_ERR_BATCH_UNSUP    = 3,
-	LGNPU_TENSOR_ERR_LAYOUT_UNKNOWN = 4,
-	LGNPU_TENSOR_ERR_OVERFLOW       = 5,
-	LGNPU_TENSOR_ERR_BUF_TOO_SMALL  = 6,
+    LGNPU_TENSOR_OK                 = 0,
+    LGNPU_TENSOR_ERR_NULL_PTR       = 1,
+    LGNPU_TENSOR_ERR_ZERO_DIM       = 2,
+    LGNPU_TENSOR_ERR_BATCH_UNSUP    = 3,
+    LGNPU_TENSOR_ERR_LAYOUT_UNKNOWN = 4,
+    LGNPU_TENSOR_ERR_OVERFLOW       = 5,
+    LGNPU_TENSOR_ERR_BUF_TOO_SMALL  = 6,
 };
 
 /* Validate a tensor descriptor.
@@ -72,35 +72,35 @@ enum npu_tensor_err npu_tensor_validate(const struct npu_tensor_desc* desc);
 /* Total number of elements (N * H * W * C).
  * Caller must ensure desc is valid (call npu_tensor_validate first).
  * (Assumes valid input) */
-PURE_CALL INLINE
+NO_DISCARD PURE_CALL INLINE
 static size_t npu_tensor_element_count(const struct npu_tensor_desc* desc)
 {
-	return (size_t)desc->dim_n * desc->dim_h * desc->dim_w * desc->dim_c;
+    return (size_t)desc->dim_n * desc->dim_h * desc->dim_w * desc->dim_c;
 }
 
 /* Total byte size of the tensor data (element_count * element_size).
  * For INT8 this equals element_count. (Assumes valid input) */
-PURE_CALL INLINE FLATTEN
+NO_DISCARD PURE_CALL INLINE FLATTEN
 static size_t npu_tensor_byte_size(const struct npu_tensor_desc* desc)
 {
-	/* INT8: one byte per element. */
-	return npu_tensor_element_count(desc);
+    /* INT8: one byte per element. */
+    return npu_tensor_element_count(desc);
 }
 
 /* Compute the linear byte offset for element [n][h][w][c] in NHWC
  * order, relative to base_addr. (Assumes valid input) */
-PURE_CALL INLINE
+NO_DISCARD PURE_CALL INLINE
 static size_t npu_tensor_nhwc_offset(
-	const struct npu_tensor_desc* desc,
-	uint16_t                      n,
-	uint16_t                      h,
-	uint16_t                      w,
-	uint16_t                      c)
+    const struct npu_tensor_desc* desc,
+    uint16_t                      n,
+    uint16_t                      h,
+    uint16_t                      w,
+    uint16_t                      c)
 {
-	return (size_t)desc->base_addr + (
-		(((size_t)n * desc->dim_h + h) *
-		desc->dim_w + w) * desc->dim_c + c
-	);
+    return (size_t)desc->base_addr + (
+        (((size_t)n * desc->dim_h + h) *
+        desc->dim_w + w) * desc->dim_c + c
+    );
 }
 
 /* Convert tensor data from its declared layout to NHWC (canonical).
@@ -114,17 +114,17 @@ static size_t npu_tensor_nhwc_offset(
  * Returns LGNPU_TENSOR_OK on success. */
 NO_DISCARD API_CALL
 enum npu_tensor_err npu_tensor_convert_to_nhwc(
-	void*        RESTRICT         dst,
-	const void*  RESTRICT         src,
-	const struct npu_tensor_desc* desc,
-	size_t                        buf_bytes
+    void*        RESTRICT         dst,
+    const void*  RESTRICT         src,
+    const struct npu_tensor_desc* desc,
+    size_t                        buf_bytes
 );
 
 /* Returns non-zero when the layout is the canonical internal layout (NHWC). */
-CONST_CALL ALWAYS_INLINE
+NO_DISCARD CONST_CALL ALWAYS_INLINE
 static int npu_tensor_is_canonical(enum npu_tensor_layout layout)
 {
-	return layout == LGNPU_LAYOUT_NHWC;
+    return layout == LGNPU_LAYOUT_NHWC;
 }
 
 #endif /* _LGNPU_TENSOR_H */
