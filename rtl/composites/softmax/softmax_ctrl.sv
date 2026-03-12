@@ -250,7 +250,11 @@ module softmax_ctrl
             norm_idx_r <= (norm_idx_r == row_len_r - 1) ? '0 : norm_idx_r + 1;
     end
 
-    // Normalize: latch exp_val and start divider when rvalid fires
+    // Restoring divider logic
+    logic [32:0] div_trial;
+    assign div_trial = {div_rem_r[30:0], div_numer_r[23]} - {1'b0, sum_r};
+
+    // Normalize: latch exp_val, start divider, and shift bits
     always_ff @(posedge clk or negedge rst_n)
     begin
         if (!rst_n) begin
@@ -268,18 +272,6 @@ module softmax_ctrl
             // Restoring divider: 24-bit numerator / 32-bit denominator (sum)
             // Shift remainder left, bring in next numerator bit
             div_cnt_r <= div_cnt_r + 1;
-        end
-    end
-
-    // Restoring divider logic
-    logic [32:0] div_trial;
-    assign div_trial = {div_rem_r[30:0], div_numer_r[23]} - {1'b0, sum_r};
-
-    always_ff @(posedge clk or negedge rst_n)
-    begin
-        if (!rst_n) begin
-            // handled above
-        end else if (state == S_NORM_DIV) begin
             if (!div_trial[32]) begin
                 // trial >= 0: quotient bit = 1
                 div_rem_r  <= div_trial[31:0];
