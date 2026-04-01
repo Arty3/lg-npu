@@ -1,7 +1,8 @@
 /* npu_dma.c - DMA transfer operations
  *
  * Programs the 5-register DMA engine and polls for completion.
- * DMA has no interrupt; completion is detected by polling DMA_STATUS.
+ * DMA completion also sets IRQ_STATUS.PENDING (OR'd with cmd_done);
+ * the pending flag is cleared after polling to prevent stale IRQ.
  * See docs/spec/register_map.md for DMA register layout.
  */
 
@@ -35,6 +36,9 @@ int lgnpu_dma_transfer(
     {
         if (!(lgnpu_reg_read(npu, LGNPU_REG_DMA_STATUS) & LGNPU_DMA_STATUS_BUSY))
         {
+            /* DMA completion sets IRQ_STATUS.PENDING; clear it so a
+             * subsequent cmd_submit does not see a stale interrupt. */
+            lgnpu_reg_write(npu, LGNPU_REG_IRQ_CLEAR, 1);
             mutex_unlock(&npu->cmd_lock);
             return 0;
         }

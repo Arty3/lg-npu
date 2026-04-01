@@ -119,6 +119,7 @@ static const struct file_operations lgnpu_fops =
 {
     .owner          = THIS_MODULE,
     .unlocked_ioctl = lgnpu_ioctl,
+    .compat_ioctl   = lgnpu_ioctl,
 };
 
 static int lgnpu_probe(struct platform_device* pdev)
