@@ -1,0 +1,2 @@
+obj-m   := lgnpu.o
+lgnpu-y := npu_drv.o npu_mmio.o npu_irq.o npu_dma.o npu_queue.o npu_reset.o

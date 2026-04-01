@@ -233,10 +233,26 @@ sw-test: sw-test-tensor sw-test-layout sw-test-command sw-test-device sw-test-dm
 	@echo ""
 	@echo "=== sw-test: ALL SUITES PASSED ==="
 
+# SW driver (out-of-tree kernel module)
+SW_DRIVER_DIR := sw/driver
+KDIR          ?= /lib/modules/$(shell uname -r)/build
+
+.PHONY: sw-driver
+sw-driver: ## Build LG NPU kernel module
+	$(MAKE) -C $(KDIR) M=$(REPO_ROOT)$(SW_DRIVER_DIR) modules
+
+.PHONY: sw-driver-clean
+sw-driver-clean: ## Clean kernel module build artifacts
+	$(MAKE) -C $(KDIR) M=$(REPO_ROOT)$(SW_DRIVER_DIR) clean
+
 .PHONY: clean
 clean: ## Remove all build artifacts
 	rm -rf $(SIM_BUILD) $(SYNTH_BUILD) $(SW_BUILD) $(SW_TEST_BUILD) obj_dir
 	rm -f sim/waves/*.vcd sim/waves/*.fst
+	rm -f $(SW_DRIVER_DIR)/*.o $(SW_DRIVER_DIR)/*.ko $(SW_DRIVER_DIR)/*.mod*
+	rm -f $(SW_DRIVER_DIR)/.*.cmd $(SW_DRIVER_DIR)/modules.order
+	rm -f $(SW_DRIVER_DIR)/Module.symvers
+	rm -rf $(SW_DRIVER_DIR)/.tmp_versions
 
 .PHONY: clean-all
 clean-all: clean ## Remove build artifacts and generated files
