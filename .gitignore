@@ -116,6 +116,7 @@ coverage/
 *.fsdb
 
 # Temporary scratch files
+/agent_space/
 *.tmp
 *.bak
 

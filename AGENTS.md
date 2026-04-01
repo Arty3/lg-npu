@@ -16,11 +16,15 @@ Use WSL for shell commands, the project is made on WSL.
 
 - Concise, neutral, code-focused. Prioritize correctness and readability.
 
-## Forbidden actions
+## Forbidden Actions
 
 - Managing dependencies unless explicitly told so.
 - Creating new documentation files unless explicitly told to (e.g. `CHANGES.md`).
 - Editing agent-related files such as this one.
+
+## Scratch Space
+
+Use agent_space/ at the repo root for any scripts, tests, throw-away files, etc. That might prove useful to you but may pollute the source tree. This directory is git ignored.
 
 ## Code Style
 
