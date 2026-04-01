@@ -7,12 +7,15 @@
 #ifndef _LGNPU_DRV_H
 #define _LGNPU_DRV_H
 
+#include "lgnpu_annotate.h"
+
 #include <linux/miscdevice.h>
 #include <linux/completion.h>
 #include <linux/spinlock.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
+#include <linux/bits.h>
 #include <linux/io.h>
 
 struct platform_device;
@@ -45,20 +48,23 @@ struct platform_device;
 #define LGNPU_CMD_WORDS         (LGNPU_CMD_ENTRY_BYTES / 4)
 
 /* CTRL register bits */
-#define LGNPU_CTRL_SOFT_RESET   (1U << 0)
-#define LGNPU_CTRL_ENABLE       (1U << 1)
+#define LGNPU_CTRL_SOFT_RESET   BIT(0)
+#define LGNPU_CTRL_ENABLE       BIT(1)
 
 /* STATUS register bits */
-#define LGNPU_STATUS_IDLE       (1U << 0)
-#define LGNPU_STATUS_BUSY       (1U << 1)
-#define LGNPU_STATUS_QUEUE_FULL (1U << 2)
+#define LGNPU_STATUS_IDLE       BIT(0)
+#define LGNPU_STATUS_BUSY       BIT(1)
+#define LGNPU_STATUS_QUEUE_FULL BIT(2)
+
+/* IRQ status bits */
+#define LGNPU_STATUS_PENDING    BIT(0)
 
 /* DMA control bits */
-#define LGNPU_DMA_CTRL_START    (1U << 0)
-#define LGNPU_DMA_CTRL_DIR      (1U << 1)
+#define LGNPU_DMA_CTRL_START    BIT(0)
+#define LGNPU_DMA_CTRL_DIR      BIT(1)
 
 /* DMA status bits */
-#define LGNPU_DMA_STATUS_BUSY   (1U << 0)
+#define LGNPU_DMA_STATUS_BUSY   BIT(0)
 
 /* DMA direction */
 #define LGNPU_DMA_TO_DEVICE     0U
@@ -85,53 +91,35 @@ struct lgnpu_device
     u32                feature_id;
 };
 
-/* MMIO (npu_mmio.c) */
+/* MMIO (npu_mmio.c / npu_mmio.h) */
 
-u32 lgnpu_reg_read(
-    const struct lgnpu_device* npu,
-    const u32                  offset
-);
-
-void lgnpu_reg_write(
-    struct lgnpu_device* npu,
-    const u32            offset,
-    const u32            val
-);
-
-void lgnpu_buf_write(
-    struct lgnpu_device* npu,
-    const u32            offset,
-    const u32*           data,
-    const u32            count
-);
-
-void lgnpu_buf_read(
-    const struct lgnpu_device* npu,
-    const u32                  offset,
-    u32*                       data,
-    const u32                  count
-);
-
+NO_DISCARD COLD_CALL NO_NULL_ARGS
 int lgnpu_mmio_init(
     struct lgnpu_device*    npu,
     struct platform_device* pdev
 );
 
 /* IRQ (npu_irq.c) */
+
+NO_DISCARD COLD_CALL NO_NULL_ARGS
 int lgnpu_irq_init(
     struct lgnpu_device*    npu,
     struct platform_device* pdev
 );
 
+HOT_CALL NO_NULL_ARGS
 void lgnpu_irq_enable(
     struct lgnpu_device* npu
 );
 
+HOT_CALL NO_NULL_ARGS
 void lgnpu_irq_disable(
     struct lgnpu_device* npu
 );
 
 /* DMA (npu_dma.c) */
+
+NO_DISCARD HOT_CALL NO_NULL_ARGS
 int lgnpu_dma_transfer(
     struct lgnpu_device* npu,
     const u32            ext_addr,
@@ -141,20 +129,26 @@ int lgnpu_dma_transfer(
 );
 
 /* Command queue (npu_queue.c) */
+
+NO_DISCARD HOT_CALL NO_NULL_ARGS
 int lgnpu_cmd_submit(
     struct lgnpu_device* npu,
     const u32*           words
 );
 
 /* Reset / init (npu_reset.c) */
+
+NO_DISCARD COLD_CALL NO_NULL_ARGS
 int lgnpu_hw_reset(
     struct lgnpu_device* npu
 );
 
+NO_DISCARD COLD_CALL NO_NULL_ARGS
 int lgnpu_hw_enable(
     struct lgnpu_device* npu
 );
 
+NO_DISCARD COLD_CALL NO_NULL_ARGS
 int lgnpu_hw_init(
     struct lgnpu_device* npu
 );

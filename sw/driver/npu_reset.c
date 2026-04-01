@@ -5,7 +5,9 @@
  * See docs/spec/reset_boot_flow.md for the full sequence.
  */
 
+#include "lgnpu_annotate.h"
 #include "lgnpu_drv.h"
+#include "npu_mmio.h"
 
 #include <linux/delay.h>
 
@@ -30,17 +32,17 @@ int lgnpu_hw_init(struct lgnpu_device* npu)
 
     ret = lgnpu_hw_reset(npu);
 
-    if (ret)
+    if (UNLIKELY(ret))
         return ret;
 
     ret = lgnpu_hw_enable(npu);
 
-    if (ret)
+    if (UNLIKELY(ret))
         return ret;
 
     npu->feature_id = lgnpu_reg_read(npu, LGNPU_REG_FEATURE_ID);
 
-    if (!npu->feature_id)
+    if (UNLIKELY(!npu->feature_id))
     {
         dev_err(npu->dev, "FEATURE_ID reads as zero, device not responding\n");
         return -ENODEV;

@@ -6,14 +6,17 @@
  * See docs/arch/programming_model.md for the host-device interaction model.
  */
 
+#include "lgnpu_annotate.h"
 #include "lgnpu_uapi.h"
 #include "lgnpu_drv.h"
+#include "npu_mmio.h"
 
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/module.h>
 #include <linux/of.h>
 
+HOT_CALL NO_INLINE
 static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
 {
     struct lgnpu_device* npu = container_of(
@@ -41,7 +44,7 @@ static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
         st.busy       = !!(val & LGNPU_STATUS_BUSY);
         st.queue_full = !!(val & LGNPU_STATUS_QUEUE_FULL);
 
-        if (copy_to_user(uptr, &st, sizeof(st)))
+        if (UNLIKELY(copy_to_user(uptr, &st, sizeof(st))))
             return -EFAULT;
 
         return 0;
@@ -61,7 +64,7 @@ static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
         info.pad[0]           = 0;
         info.pad[1]           = 0;
 
-        if (copy_to_user(uptr, &info, sizeof(info)))
+        if (UNLIKELY(copy_to_user(uptr, &info, sizeof(info))))
             return -EFAULT;
 
         return 0;
@@ -71,7 +74,7 @@ static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
     {
         struct lgnpu_ioctl_submit sub;
 
-        if (copy_from_user(&sub, uptr, sizeof(sub)))
+        if (UNLIKELY(copy_from_user(&sub, uptr, sizeof(sub))))
             return -EFAULT;
 
         return lgnpu_cmd_submit(npu, sub.words);
@@ -81,10 +84,10 @@ static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
     {
         struct lgnpu_ioctl_dma dma;
 
-        if (copy_from_user(&dma, uptr, sizeof(dma)))
+        if (UNLIKELY(copy_from_user(&dma, uptr, sizeof(dma))))
             return -EFAULT;
 
-        if (dma.dir > LGNPU_DMA_FROM_DEVICE)
+        if (UNLIKELY(dma.dir > LGNPU_DMA_FROM_DEVICE))
             return -EINVAL;
 
         return lgnpu_dma_transfer(
@@ -104,7 +107,7 @@ static long lgnpu_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
         perf.active = lgnpu_reg_read(npu, LGNPU_REG_PERF_ACTIVE);
         perf.stall  = lgnpu_reg_read(npu, LGNPU_REG_PERF_STALL);
 
-        if (copy_to_user(uptr, &perf, sizeof(perf)))
+        if (UNLIKELY(copy_to_user(uptr, &perf, sizeof(perf))))
             return -EFAULT;
 
         return 0;
@@ -122,6 +125,7 @@ static const struct file_operations lgnpu_fops =
     .compat_ioctl   = lgnpu_ioctl,
 };
 
+COLD_CALL NO_INLINE
 static int lgnpu_probe(struct platform_device* pdev)
 {
     struct lgnpu_device* npu;
@@ -129,7 +133,7 @@ static int lgnpu_probe(struct platform_device* pdev)
 
     npu = devm_kzalloc(&pdev->dev, sizeof(*npu), GFP_KERNEL);
 
-    if (!npu)
+    if (UNLIKELY(!npu))
         return -ENOMEM;
 
     npu->dev = &pdev->dev;
@@ -142,17 +146,17 @@ static int lgnpu_probe(struct platform_device* pdev)
 
     ret = lgnpu_mmio_init(npu, pdev);
 
-    if (ret)
+    if (UNLIKELY(ret))
         return ret;
 
     ret = lgnpu_irq_init(npu, pdev);
 
-    if (ret)
+    if (UNLIKELY(ret))
         return ret;
 
     ret = lgnpu_hw_init(npu);
 
-    if (ret)
+    if (UNLIKELY(ret))
         return ret;
 
     npu->miscdev.minor = MISC_DYNAMIC_MINOR;
@@ -161,7 +165,7 @@ static int lgnpu_probe(struct platform_device* pdev)
 
     ret = misc_register(&npu->miscdev);
 
-    if (ret)
+    if (UNLIKELY(ret))
     {
         dev_err(npu->dev, "failed to register misc device\n");
         return ret;
@@ -175,6 +179,7 @@ static int lgnpu_probe(struct platform_device* pdev)
 /* Targets Linux >= 6.11 where .remove returns void.
  * For 6.3-6.10, rename to .remove_new in the driver struct.
  * For < 6.3, change return type to int and return 0. */
+COLD_CALL NO_INLINE
 static void lgnpu_remove(struct platform_device* pdev)
 {
     struct lgnpu_device* npu = platform_get_drvdata(pdev);

@@ -5,7 +5,9 @@
  * See docs/spec/command_format.md for the descriptor layout.
  */
 
+#include "lgnpu_annotate.h"
 #include "lgnpu_drv.h"
+#include "npu_mmio.h"
 
 #include <linux/jiffies.h>
 
@@ -16,7 +18,7 @@ int lgnpu_cmd_submit(struct lgnpu_device* npu, const u32* words)
     const u32 status = lgnpu_reg_read(npu, LGNPU_REG_STATUS);
 
     /* Reject if hardware queue is full */
-    if (status & LGNPU_STATUS_QUEUE_FULL)
+    if (UNLIKELY(status & LGNPU_STATUS_QUEUE_FULL))
     {
         mutex_unlock(&npu->cmd_lock);
         return -EBUSY;
@@ -39,13 +41,13 @@ int lgnpu_cmd_submit(struct lgnpu_device* npu, const u32* words)
     lgnpu_irq_disable(npu);
     mutex_unlock(&npu->cmd_lock);
 
-    if (!timeout)
+    if (UNLIKELY(!timeout))
     {
         dev_err(npu->dev, "command submission timed out\n");
         return -ETIMEDOUT;
     }
 
-    if (timeout < 0)
+    if (UNLIKELY(timeout < 0))
         return (int)timeout;
 
     return 0;

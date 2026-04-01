@@ -6,8 +6,11 @@
  * See docs/spec/register_map.md for DMA register layout.
  */
 
-#include <linux/delay.h>
+#include "lgnpu_annotate.h"
 #include "lgnpu_drv.h"
+#include "npu_mmio.h"
+
+#include <linux/delay.h>
 
 int lgnpu_dma_transfer(
     struct lgnpu_device* npu,
@@ -38,7 +41,7 @@ int lgnpu_dma_transfer(
         {
             /* DMA completion sets IRQ_STATUS.PENDING; clear it so a
              * subsequent cmd_submit does not see a stale interrupt. */
-            lgnpu_reg_write(npu, LGNPU_REG_IRQ_CLEAR, 1);
+            lgnpu_reg_write(npu, LGNPU_REG_IRQ_CLEAR, LGNPU_STATUS_PENDING);
             mutex_unlock(&npu->cmd_lock);
             return 0;
         }

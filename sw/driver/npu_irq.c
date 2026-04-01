@@ -4,11 +4,14 @@
  * See docs/spec/interrupts.md for the full interrupt lifecycle.
  */
 
+#include "lgnpu_annotate.h"
 #include "lgnpu_drv.h"
+#include "npu_mmio.h"
 
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
 
+HOT_CALL NO_INLINE
 static irqreturn_t lgnpu_irq_handler(int irq, void* data)
 {
     struct lgnpu_device* npu = data;
@@ -17,13 +20,13 @@ static irqreturn_t lgnpu_irq_handler(int irq, void* data)
 
     const u32 status = lgnpu_reg_read(npu, LGNPU_REG_IRQ_STATUS);
 
-    if (!(status & 1U))
+    if (UNLIKELY(!(status & LGNPU_IRQ_STATUS_PENDING)))
     {
         spin_unlock(&npu->irq_lock);
         return IRQ_NONE;
     }
 
-    lgnpu_reg_write(npu, LGNPU_REG_IRQ_CLEAR, 1);
+    lgnpu_reg_write(npu, LGNPU_REG_IRQ_CLEAR, LGNPU_IRQ_STATUS_PENDING);
     spin_unlock(&npu->irq_lock);
 
     complete(&npu->cmd_done);
@@ -37,7 +40,7 @@ int lgnpu_irq_init(struct lgnpu_device* npu, struct platform_device* pdev)
 
     irq = platform_get_irq(pdev, 0);
 
-    if (irq < 0)
+    if (UNLIKELY(irq < 0))
         return irq;
 
     ret = devm_request_irq(
@@ -49,7 +52,7 @@ int lgnpu_irq_init(struct lgnpu_device* npu, struct platform_device* pdev)
         npu
     );
 
-    if (ret)
+    if (UNLIKELY(ret))
     {
         dev_err(npu->dev, "failed to request IRQ %d\n", irq);
         return ret;
