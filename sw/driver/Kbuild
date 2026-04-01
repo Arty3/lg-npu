@@ -1,2 +1,15 @@
 obj-m   := lgnpu.o
 lgnpu-y := npu_drv.o npu_mmio.o npu_irq.o npu_dma.o npu_queue.o npu_reset.o
+
+# Omitted:
+#   -std=c17            kernel sets its own C standard
+#   -Ofast / -flto      kernel mandates -O2; -O3 is the safe maximum
+ccflags-y += -O3 \
+             -Wall -Wextra -Wpedantic -Werror \
+             -Wcast-align -Wcast-qual -Wconversion \
+             -Wformat=2 -Wformat-security \
+             -Wimplicit-fallthrough -Wmissing-declarations \
+             -Wmissing-field-initializers -Wnull-dereference -Wpacked \
+             -Wpointer-arith -Wshadow -Wsign-conversion \
+             -Wstrict-overflow=5 -Wswitch-default -Wundef \
+             -Wuninitialized -Wunreachable-code -Wunused -Wvla -Wwrite-strings
