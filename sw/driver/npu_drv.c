@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 */
+
 /* npu_drv.c - LG NPU platform driver core
  *
  * Module init/exit, platform probe/remove, and misc device file operations.
@@ -203,8 +205,5 @@ static struct platform_driver lgnpu_platform_driver =
 module_platform_driver(lgnpu_platform_driver);
 
 MODULE_DESCRIPTION("LG NPU driver");
-
-/* SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 */
 MODULE_LICENSE("GPL");
-
 MODULE_AUTHOR("Luca Goddijn");
