@@ -23,12 +23,14 @@ module conv_pe
     input  logic                      ready_in
 );
 
+    logic signed [2*DATA_W-1:0]       mul;
     logic signed [ACC_W-1:0]          product;
     logic signed [ACC_W-1:0]          result_r;
     logic                             valid_r;
     logic                             do_accept, do_emit;
 
-    assign product   = acc_in + (ACC_W'(act_in) * ACC_W'(wt_in));
+    assign mul       = act_in   * wt_in;
+    assign product   = acc_in   + ACC_W'(mul);
     assign do_accept = valid_in & ready_out;
     assign do_emit   = valid_r  & ready_in;
     assign ready_out = ~valid_r | ready_in;
