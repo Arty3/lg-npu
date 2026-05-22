@@ -23,16 +23,19 @@ module conv_array
 );
 
     conv_pe u_pe (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .act_in    (act_in),
-        .wt_in     (wt_in),
-        .acc_in    (acc_in),
-        .acc_out   (acc_out),
-        .valid_in  (valid_in),
-        .ready_out (ready_out),
-        .valid_out (valid_out),
-        .ready_in  (ready_in)
+        .clk          (clk),
+        .rst_n        (rst_n),
+        .act_in       (act_in),
+        .wt_in        (wt_in),
+        .acc_in       (acc_in),
+        .acc_out      (acc_out),
+        .valid_in     (valid_in),
+        .ready_out    (ready_out),
+        .valid_out    (valid_out),
+        .ready_in     (ready_in),
+        // Combinational overflow flag is not exposed by conv_array yet;
+        // wire it out when a consumer (e.g. status/IRQ block) needs it.
+        .acc_overflow (/* unused */)
     );
 
 endmodule : conv_array
