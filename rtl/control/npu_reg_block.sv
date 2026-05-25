@@ -209,7 +209,7 @@ module npu_reg_block
             is_buf_r <= is_buf;
     end
 
-    assign mmio_ready = is_buf ? buf_gnt : 1'b1;
+    assign mmio_ready = is_buf ? (mmio_wr ? buf_gnt : buf_rvalid) : 1'b1;
     assign mmio_rdata = is_buf_r ? buf_rdata : reg_rdata;
 
 endmodule : npu_reg_block

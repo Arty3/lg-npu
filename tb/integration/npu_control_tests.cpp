@@ -10,43 +10,56 @@
 #include <cstdio>
 
 // A small known-good convolution for use as a baseline within tests
-static bool run_small_conv(NpuTb &tb, const char *label)
+static bool run_small_conv(NpuTb& tb, const char* label)
 {
-    auto act = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
+    auto act = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
     auto wt  = std::vector<int8_t>(9, 1);
+
     std::vector<int8_t> bias;
-    return tb.run_conv_test(label, act, wt, bias,
-                            4, 4, 1, 1, 3, 3,
-                            1, 1, 0, 0, 0);
+
+    return tb.run_conv_test(
+        label, act, wt, bias,
+        4, 4, 1, 1, 3, 3,
+        1, 1, 0, 0, 0
+    );
 }
 
 // Test: bad opcode
-static bool test_bad_opcode(TestResult &r)
+static bool test_bad_opcode(TestResult& r)
 {
     printf("[test] bad_opcode\n");
+
     NpuTb tb("sim/waves/control_tests.vcd");
     tb.reset();
     tb.enable();
 
     // Submit a command with opcode=0 (invalid, only OP_CONV=1 is valid)
     uint32_t words[16] = {};
-    words[0] = 0;  // bad opcode
+    words[0] = 0;
+
     for (int i = 0; i < 16; ++i)
         tb.mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
     tb.mmio_write(REG_DOORBELL, 1);
 
-    // Give it time to process
     tb.run_clocks(200);
 
     // IRQ should fire (decode_err triggers IRQ)
-    uint32_t irq_st = tb.mmio_read(REG_IRQ_STATUS);
+    const uint32_t irq_st = tb.mmio_read(REG_IRQ_STATUS);
+
     bool pass = (irq_st & 1) != 0;
     if (!pass)
         printf("  [FAIL] bad_opcode: IRQ not set (irq_status=0x%x)\n", irq_st);
 
     // NPU should return to idle (bad command is discarded)
-    bool idle = tb.wait_idle(1000);
-    if (!idle)
+    if (!tb.wait_idle(1000))
     {
         printf("  [FAIL] bad_opcode: NPU did not return to idle\n");
         pass = false;
@@ -54,8 +67,7 @@ static bool test_bad_opcode(TestResult &r)
 
     // Acknowledge IRQ
     tb.mmio_write(REG_IRQ_CLEAR, 1);
-    uint32_t irq_after = tb.mmio_read(REG_IRQ_STATUS);
-    if (irq_after & 1)
+    if (tb.mmio_read(REG_IRQ_STATUS) & 1)
     {
         printf("  [FAIL] bad_opcode: IRQ not cleared after write to IRQ_CLEAR\n");
         pass = false;
@@ -63,33 +75,43 @@ static bool test_bad_opcode(TestResult &r)
 
     // Enable IRQ and resubmit bad opcode to verify irq_out pin asserts
     tb.mmio_write(REG_IRQ_ENABLE, 1);
+
     for (int i = 0; i < 16; ++i)
         tb.mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, 0);
+
     tb.mmio_write(REG_DOORBELL, 1);
+
     tb.run_clocks(200);
+
     if (!tb.raw()->irq)
     {
         printf("  [FAIL] bad_opcode: irq_out pin not asserted with IRQ_ENABLE=1\n");
         pass = false;
     }
+
     tb.mmio_write(REG_IRQ_CLEAR, 1);
 
-    if (pass) printf("  [PASS] bad_opcode\n");
+    if (pass)
+        printf("  [PASS] bad_opcode\n");
+
     r.record(pass);
+
     return pass;
 }
 
 // Test: reset during active operation
-static bool test_reset_during_operation(TestResult &r)
+static bool test_reset_during_operation(TestResult& r)
 {
     printf("[test] reset_during_operation\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
 
     // Load data for a convolution
     auto act = std::vector<int8_t>(25, 5);  // 5x5
-    auto wt  = std::vector<int8_t>(9, 1);   // 3x3
+    auto wt  = std::vector<int8_t>(9,  1);  // 3x3
+
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
 
@@ -98,9 +120,15 @@ static bool test_reset_during_operation(TestResult &r)
     desc.opcode       = 1;
     desc.act_in_addr  = 0;
     desc.act_out_addr = 2048;
-    desc.in_h = 5; desc.in_w = 5; desc.in_c = 1;
-    desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-    desc.stride_h = 1; desc.stride_w = 1;
+    desc.in_h         = 5;
+    desc.in_w         = 5;
+    desc.in_c         = 1;
+    desc.out_k        = 1;
+    desc.filt_r       = 3;
+    desc.filt_s       = 3;
+    desc.stride_h     = 1;
+    desc.stride_w     = 1;
+
     tb.submit_conv(desc);
 
     // Let it start processing (but don't wait for completion)
@@ -119,22 +147,28 @@ static bool test_reset_during_operation(TestResult &r)
     {
         tb.load_bytes(WEIGHT_BUF_BASE, wt);
         tb.load_bytes(ACT_BUF_BASE, act);
+
         pass = tb.run_conv_test(
             "reset_during_operation (post-reset conv)",
-            act, wt, {}, 5, 5, 1, 1, 3, 3, 1, 1, 0, 0, 0);
+            act, wt, {}, 5, 5, 1, 1, 3, 3, 1, 1, 0, 0, 0
+        );
     }
 
-    if (pass) printf("  [PASS] reset_during_operation\n");
+    if (pass)
+        printf("  [PASS] reset_during_operation\n");
+
     r.record(pass);
+
     return pass;
 }
 
 // Test: busy/done sequencing is sane
 //   After doorbell, BUSY should go high before IDLE.
 //   After completion, IDLE should be high and BUSY low.
-static bool test_busy_done_sequencing(TestResult &r)
+static bool test_busy_done_sequencing(TestResult& r)
 {
     printf("[test] busy_done_sequencing\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
@@ -149,27 +183,44 @@ static bool test_busy_done_sequencing(TestResult &r)
     }
 
     // Load a small conv
-    auto act = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
+    auto act = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
     auto wt  = std::vector<int8_t>(9, 1);
+
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
 
     ConvDesc desc{};
-    desc.opcode = 1;
+    desc.opcode       = 1;
     desc.act_out_addr = 2048;
-    desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-    desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-    desc.stride_h = 1; desc.stride_w = 1;
+    desc.in_h         = 4;
+    desc.in_w         = 4;
+    desc.in_c         = 1;
+    desc.out_k        = 1;
+    desc.filt_r       = 3;
+    desc.filt_s       = 3;
+    desc.stride_h     = 1;
+    desc.stride_w     = 1;
 
     // Write command words + doorbell manually (no free-run)
+
     uint32_t words[16];
     desc.to_words(words);
+
     for (int i = 0; i < 16; ++i)
         tb.mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
     tb.mmio_write(REG_DOORBELL, 1);
 
     // Immediately after doorbell, check that we transition out of idle
     // (Use free-running ticks so MMIO polling doesn't stall the pipeline)
+
     bool saw_not_idle = false;
     for (int i = 0; i < 2000; ++i)
     {
@@ -199,8 +250,10 @@ static bool test_busy_done_sequencing(TestResult &r)
 
     // After completion: idle=1, busy=0
     uint32_t final_st = tb.read_status();
+
     bool final_idle = (final_st >> STATUS_IDLE_BIT) & 1;
     bool final_busy = (final_st >> STATUS_BUSY_BIT) & 1;
+
     if (!final_idle || final_busy)
     {
         printf("  [FAIL] busy_done_sequencing: post-completion status=0x%x (idle=%d busy=%d)\n",
@@ -208,14 +261,17 @@ static bool test_busy_done_sequencing(TestResult &r)
         pass = false;
     }
 
-    if (pass) printf("  [PASS] busy_done_sequencing\n");
+    if (pass)
+        printf("  [PASS] busy_done_sequencing\n");
+
     r.record(pass);
+
     return pass;
 }
 
 // Test: back-to-back commands
 //   Submit two convolutions in sequence without resetting.
-static bool test_back_to_back(TestResult &r)
+static bool test_back_to_back(TestResult& r)
 {
     printf("[test] back_to_back\n");
     NpuTb tb;
@@ -242,7 +298,7 @@ static bool test_back_to_back(TestResult &r)
 }
 
 // Test: hard reset clears expected state
-static bool test_hard_reset_clears_state(TestResult &r)
+static bool test_hard_reset_clears_state(TestResult& r)
 {
     printf("[test] hard_reset_clears_state\n");
     NpuTb tb;
@@ -314,7 +370,7 @@ static bool test_hard_reset_clears_state(TestResult &r)
 // Test: output writes only occur during valid computation
 //   Run a convolution, verify the output area before and after differs
 //   only at expected locations.
-static bool test_output_writes_only_when_valid(TestResult &r)
+static bool test_output_writes_only_when_valid(TestResult& r)
 {
     printf("[test] output_writes_only_when_valid\n");
     NpuTb tb;
@@ -376,7 +432,7 @@ static bool test_output_writes_only_when_valid(TestResult &r)
 }
 
 // Test: IRQ fires on completion and can be cleared
-static bool test_irq_completion(TestResult &r)
+static bool test_irq_completion(TestResult& r)
 {
     printf("[test] irq_completion\n");
     NpuTb tb;
@@ -415,6 +471,10 @@ static bool test_irq_completion(TestResult &r)
         pass = false;
     }
 
+    // Advance a couple cycles so direct pin sampling happens after the
+    // completed MMIO transaction has fully settled in the testbench model.
+    tb.run_clocks(2);
+
     // Check irq output pin
     if (!tb.raw()->irq)
     {
@@ -438,7 +498,7 @@ static bool test_irq_completion(TestResult &r)
 }
 
 // Test: feature ID readback
-static bool test_feature_id(TestResult &r)
+static bool test_feature_id(TestResult& r)
 {
     printf("[test] feature_id\n");
     NpuTb tb;

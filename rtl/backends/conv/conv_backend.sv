@@ -106,6 +106,11 @@ module conv_backend
     logic zero_pad;
     logic addr_gen_ready, addr_gen_valid;
 
+    // conv_loader
+    logic signed [DATA_W-1:0] load_act, load_wt;
+    logic load_pair_valid, load_pair_ready;
+    logic load_req_ready;
+
     conv_addr_gen u_addr_gen (
         .clk      (clk),
         .rst_n    (rst_n),
@@ -134,11 +139,6 @@ module conv_backend
         .wt_addr  (wt_addr),
         .zero_pad (zero_pad)
     );
-
-    // conv_loader
-    logic signed [DATA_W-1:0] load_act, load_wt;
-    logic load_pair_valid, load_pair_ready;
-    logic load_req_ready;
 
     conv_loader u_loader (
         .clk            (clk),
@@ -170,55 +170,70 @@ module conv_backend
     logic signed [ACC_W-1:0] acc_feedback, acc_out_val, pe_acc_out;
     logic pe_valid_out, pe_ready_out;
 
-    // Pipeline-align control signals from conv_ctrl.
-    // conv_ctrl advances loop counters on (iter_valid & iter_ready), which
-    // is when the loader accepts the iteration.  The loader then takes
-    // multiple cycles (S_REQ -> S_WAIT -> S_DONE) before the PE sees the
-    // data.  We capture acc_clr, last_inner, and the write address at
-    // iter-accept time so they stay valid through the loader pipeline.
-
     logic iter_accept;
-    assign iter_accept = iter_valid & iter_ready;
-
+    logic load_accept;
     logic pe_accept;
-    assign pe_accept = load_pair_valid & load_pair_ready;
 
-    // Stage 1: capture at loader-accept time (loop indices still correct)
-    logic last_inner_q, acc_clr_q;
-    logic [ADDR_W-1:0] wr_addr_q;
-    logic [ADDR_W-1:0] bias_addr_q;
+    assign iter_accept = iter_valid & iter_ready;
+    assign load_accept = addr_gen_valid & load_req_ready;
+    assign pe_accept   = load_pair_valid & load_pair_ready;
+
+    // Metadata pipeline: iter_accept -> load_accept -> pe_accept.
+    logic last_inner_iter_r, acc_clr_iter_r;
+    logic [ADDR_W-1:0] wr_addr_iter_r;
+    logic [ADDR_W-1:0] bias_addr_iter_r;
+
+    logic last_inner_load_r, acc_clr_load_r;
+    logic [ADDR_W-1:0] wr_addr_load_r;
+    logic [ADDR_W-1:0] bias_addr_load_r;
+
+    logic last_inner_d;
+    logic [ADDR_W-1:0] wr_addr_d;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            last_inner_q <= 1'b0;
-            acc_clr_q    <= 1'b0;
-            wr_addr_q    <= '0;
-            bias_addr_q  <= '0;
+            last_inner_iter_r <= 1'b0;
+            acc_clr_iter_r    <= 1'b0;
+            wr_addr_iter_r    <= '0;
+            bias_addr_iter_r  <= '0;
         end else if (iter_accept) begin
-            last_inner_q <= last_inner;
-            acc_clr_q    <= acc_clr;
+            last_inner_iter_r <= last_inner;
+            acc_clr_iter_r    <= acc_clr;
             if (last_inner) begin
-                wr_addr_q   <= out_base + ADDR_W'(((oh * out_w) + ow) * out_k + k);
-                bias_addr_q <= bias_base + ADDR_W'(k);
+                wr_addr_iter_r   <= out_base + ADDR_W'(((oh * out_w) + ow) * out_k + k);
+                bias_addr_iter_r <= bias_base + ADDR_W'(k);
             end
         end
     end
 
-    // Stage 2: capture at PE-accept time for downstream logic that keys
-    // off pe_valid_out (arrives one cycle after pe_accept).
-    logic last_inner_d;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            last_inner_load_r <= 1'b0;
+            acc_clr_load_r    <= 1'b0;
+            wr_addr_load_r    <= '0;
+            bias_addr_load_r  <= '0;
+        end else if (load_accept) begin
+            last_inner_load_r <= last_inner_iter_r;
+            acc_clr_load_r    <= acc_clr_iter_r;
+            wr_addr_load_r    <= wr_addr_iter_r;
+            bias_addr_load_r  <= bias_addr_iter_r;
+        end
+    end
 
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
+        if (!rst_n) begin
             last_inner_d <= 1'b0;
-        else if (pe_accept)
-            last_inner_d <= last_inner_q;
+            wr_addr_d    <= '0;
+        end else if (pe_accept) begin
+            last_inner_d <= last_inner_load_r;
+            wr_addr_d    <= wr_addr_load_r;
+        end
     end
 
     conv_accum u_accum (
         .clk          (clk),
         .rst_n        (rst_n),
-        .clr          (acc_clr_q & pe_accept),
+        .clr          (acc_clr_load_r & pe_accept),
         .acc_en       (pe_valid_out & pe_ready_out),
         .mac_result   (pe_acc_out),
         .acc_out      (acc_out_val),
@@ -238,11 +253,11 @@ module conv_backend
         .ready_in  (pe_ready_out)
     );
 
-    // Bias fetch: issue read when the last-inner iteration is accepted by PE
-    assign bias_rd_addr = bias_addr_q;
-    assign bias_rd_req  = last_inner_q & pe_accept;
+    // Bias fetch: issue read when the last-inner iteration is accepted by PE.
+    assign bias_rd_addr = bias_addr_load_r;
+    assign bias_rd_req  = last_inner_load_r & pe_accept;
 
-    // pp_trigger fires when the PE outputs the result of a last-inner iteration
+    // pp_trigger fires when the PE outputs the result of a last-inner iteration.
     logic pp_trigger;
     logic pp_trigger_r;
     assign pp_trigger = last_inner_d & pe_valid_out & pe_ready_out;
@@ -254,9 +269,7 @@ module conv_backend
             pp_trigger_r <= pp_trigger;
     end
 
-    // Bias data: latch when rvalid fires so it stays stable through
-    // the postproc pipeline (SRAM rdata may be overwritten by the
-    // next weight read before the postproc samples it).
+    // Bias data: latch when rvalid fires so it stays stable through postproc.
     logic signed [DATA_W-1:0] bias_val;
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
@@ -265,9 +278,11 @@ module conv_backend
             bias_val <= bias_rd_rdata;
     end
 
-    // PE backpressure: stall when processing a last-inner result
+    // PE backpressure: stall when processing a last-inner result.
+    // Keep write-address metadata and postproc data in lockstep.
     logic pp_in_ready;
-    assign pe_ready_out = last_inner_d ? pp_in_ready : 1'b1;
+    logic wr_addr_in_ready;
+    assign pe_ready_out = last_inner_d ? (pp_in_ready & wr_addr_in_ready) : 1'b1;
 
     // conv_postproc
     logic signed [DATA_W-1:0] pp_out_data;
@@ -288,21 +303,21 @@ module conv_backend
     );
 
     // conv_writer
-    // Transfer latched write address when pp_trigger fires
     logic [ADDR_W-1:0]  wr_out_addr;
     logic               wr_addr_valid;
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            wr_out_addr   <= '0;
-            wr_addr_valid <= 1'b0;
-        end else if (pp_trigger) begin
-            wr_out_addr   <= wr_addr_q;
-            wr_addr_valid <= 1'b1;
-        end else if (pp_out_valid && pp_out_ready) begin
-            wr_addr_valid <= 1'b0;
-        end
-    end
+    skid_buffer #(
+        .DATA_W (ADDR_W)
+    ) u_wr_addr_q (
+        .clk       (clk),
+        .rst_n     (rst_n),
+        .in_data   (wr_addr_d),
+        .in_valid  (pp_trigger),
+        .in_ready  (wr_addr_in_ready),
+        .out_data  (wr_out_addr),
+        .out_valid (wr_addr_valid),
+        .out_ready (pp_out_valid & pp_out_ready)
+    );
 
     /* verilator lint_off UNUSEDSIGNAL */
     logic wr_mem_wr;
@@ -325,12 +340,12 @@ module conv_backend
         .write_done (wr_done)
     );
 
-    // Gate done/busy so the backend waits for the write pipeline to drain
-    logic  pipe_empty;
+    // Gate done/busy so the backend waits for the write pipeline to drain.
+    logic pipe_empty;
     assign pipe_empty = ~pp_trigger_r & ~pp_out_valid & ~wr_addr_valid
                       &  pp_out_ready;
 
-    // ctrl_done is a 1-cycle pulse; latch it until the pipeline empties
+    // ctrl_done is a 1-cycle pulse; latch it until the pipeline empties.
     logic ctrl_finished;
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)

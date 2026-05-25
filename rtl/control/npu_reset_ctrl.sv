@@ -23,8 +23,8 @@ module npu_reset_ctrl (
     // Synchronize software reset release to avoid reset-tree issues.
     always_ff @(posedge clk or negedge hard_rst_n) begin
         if (!hard_rst_n) begin
-            soft_reset_sync1 <= 1'b1;
-            soft_reset_sync2 <= 1'b1;
+            soft_reset_sync1 <= 1'b0;
+            soft_reset_sync2 <= 1'b0;
         end else begin
             soft_reset_sync1 <= soft_reset;
             soft_reset_sync2 <= soft_reset_sync1;

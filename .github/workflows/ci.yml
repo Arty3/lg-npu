@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate RTL, SW, and generated artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator yosys sv2v gcc make
+
+      - name: Install netlistsvg
+        run: npm install -g netlistsvg
+
+      - name: Lint RTL
+        run: make lint
+
+      - name: Run all RTL simulations
+        run: make sim-full
+
+      - name: SW syntax checks
+        run: make sw-check
+
+      - name: SW runtime tests
+        run: make sw-test
+
+      - name: Regenerate code artifacts
+        run: make gen
+
+      - name: Regenerate architecture diagrams
+        run: make viz
+
+      - name: Verify generated artifacts are committed
+        run: |
+          git diff --exit-code -- include/pkg/npu_addrmap_pkg.sv sw/uapi/npu_regs.h docs/diagrams

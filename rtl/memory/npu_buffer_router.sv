@@ -75,16 +75,38 @@ module npu_buffer_router
     logic                    wt_be_gnt;
     logic [DATA_W-1:0]       wt_be_rdata;
     logic                    wt_be_rvalid;
+    logic                    wt_issue_bias;
+    logic                    bias_pending_r;
+    logic [SRAM_ADDR_W-1:0]  bias_addr_pending_r;
 
-    assign wt_be_sel_bias = be_bias_req;
-    assign wt_be_addr     = wt_be_sel_bias ? be_bias_addr[SRAM_ADDR_W-1:0]
-                                           : be_wt_addr[SRAM_ADDR_W-1:0];
-    assign wt_be_req      = be_wt_req | be_bias_req;
+    // Weight reads have priority; bias requests are deferred by one slot
+    // when they collide, so no backend request is silently dropped.
+    assign wt_issue_bias  = bias_pending_r | (be_bias_req & ~be_wt_req);
+    assign wt_be_sel_bias = wt_issue_bias;
+    assign wt_be_addr     = wt_be_sel_bias
+                          ? (bias_pending_r ? bias_addr_pending_r
+                                            : be_bias_addr[SRAM_ADDR_W-1:0])
+                          : be_wt_addr[SRAM_ADDR_W-1:0];
+    assign wt_be_req      = be_wt_req | wt_issue_bias;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            bias_pending_r      <= 1'b0;
+            bias_addr_pending_r <= '0;
+        end else begin
+            if (be_bias_req && be_wt_req && !bias_pending_r) begin
+                bias_pending_r      <= 1'b1;
+                bias_addr_pending_r <= be_bias_addr[SRAM_ADDR_W-1:0];
+            end
+            if (wt_be_req && wt_be_gnt && wt_be_sel_bias)
+                bias_pending_r <= 1'b0;
+        end
+    end
 
 `ifdef SIMULATION
     always_ff @(posedge clk) begin
-        if (rst_n)
-            assert (!(be_wt_req && be_bias_req));
+        if (rst_n && be_bias_req && be_wt_req)
+            assert (!bias_pending_r);
     end
 `endif
 

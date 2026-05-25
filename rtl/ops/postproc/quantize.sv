@@ -25,16 +25,12 @@ module quantize
     localparam logic signed [ACC_W-1:0] SAT_MAX =  32'sd127;
     localparam logic signed [ACC_W-1:0] SAT_MIN = -32'sd128;
 
-    logic signed [ACC_W-1:0]  rounding_bias;
-    logic signed [ACC_W-1:0]  rounded_in;
     logic signed [ACC_W-1:0]  shifted;
     logic signed [DATA_W-1:0] quantized;
 
-    assign rounding_bias = (quant_shift == 5'd0)
-                         ? '0
-                         : (32'sd1 <<< (quant_shift - 5'd1));
-    assign rounded_in    = in_data + (in_data[ACC_W-1] ? -rounding_bias : rounding_bias);
-    assign shifted       = rounded_in >>> quant_shift;
+    // Quantization is arithmetic shift (no rounding bias).
+    assign shifted       = in_data >>> quant_shift;
+
     assign quantized     = (shifted > SAT_MAX) ? DATA_W'(SAT_MAX) :
                            (shifted < SAT_MIN) ? DATA_W'(SAT_MIN) : shifted[DATA_W-1:0];
 

@@ -116,9 +116,8 @@ Run `make help` to list all targets. The most common ones:
 
 ```bash
 make lint              # Verilator lint (zero-warning gate)
-make compile           # Verilate -> C++ model
 make compile-full-tests # Build full regression binary
-make sim-smoke         # Smoke regression (conv + control + perf)
+make sim-smoke         # Smoke regression (control + perf)
 make sim-full          # Full regression (all test suites)
 make sw-check          # Syntax-check runtime C sources (-fsyntax-only)
 make sw-build          # Build liblgnpu_rt.a and liblgnpu_rt.so

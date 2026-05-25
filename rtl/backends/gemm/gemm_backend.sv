@@ -146,49 +146,70 @@ module gemm_backend
     logic signed [ACC_W-1:0] acc_feedback, acc_out_val, pe_acc_out;
     logic pe_valid_out, pe_ready_out;
 
-    // Pipeline-align control signals from gemm_ctrl.
-    // Same timing contract as conv_backend: capture at iter-accept time.
+    // Metadata pipeline: iter_accept -> load_accept -> pe_accept.
     logic iter_accept;
-    assign iter_accept = iter_valid & iter_ready;
-
+    logic load_accept;
     logic pe_accept;
-    assign pe_accept = load_pair_valid & load_pair_ready;
 
-    // Stage 1: capture at loader-accept time
-    logic last_inner_q, acc_clr_q;
-    logic [ADDR_W-1:0] wr_addr_q;
-    logic [ADDR_W-1:0] bias_addr_q;
+    assign iter_accept = iter_valid & iter_ready;
+    assign load_accept = addr_gen_valid & load_req_ready;
+    assign pe_accept   = load_pair_valid & load_pair_ready;
+
+    logic last_inner_iter_r, acc_clr_iter_r;
+    logic [ADDR_W-1:0] wr_addr_iter_r;
+    logic [ADDR_W-1:0] bias_addr_iter_r;
+
+    logic last_inner_load_r, acc_clr_load_r;
+    logic [ADDR_W-1:0] wr_addr_load_r;
+    logic [ADDR_W-1:0] bias_addr_load_r;
+
+    logic last_inner_d;
+    logic [ADDR_W-1:0] wr_addr_d;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            last_inner_q <= 1'b0;
-            acc_clr_q    <= 1'b0;
-            wr_addr_q    <= '0;
-            bias_addr_q  <= '0;
+            last_inner_iter_r <= 1'b0;
+            acc_clr_iter_r    <= 1'b0;
+            wr_addr_iter_r    <= '0;
+            bias_addr_iter_r  <= '0;
         end else if (iter_accept) begin
-            last_inner_q <= last_inner;
-            acc_clr_q    <= acc_clr;
+            last_inner_iter_r <= last_inner;
+            acc_clr_iter_r    <= acc_clr;
             if (last_inner) begin
-                wr_addr_q   <= c_base + ADDR_W'(m_idx * n_dim + n_idx);
-                bias_addr_q <= bias_base + ADDR_W'(n_idx);
+                wr_addr_iter_r   <= c_base + ADDR_W'(m_idx * n_dim + n_idx);
+                bias_addr_iter_r <= bias_base + ADDR_W'(n_idx);
             end
         end
     end
 
-    // Stage 2: capture at PE-accept time
-    logic last_inner_d;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            last_inner_load_r <= 1'b0;
+            acc_clr_load_r    <= 1'b0;
+            wr_addr_load_r    <= '0;
+            bias_addr_load_r  <= '0;
+        end else if (load_accept) begin
+            last_inner_load_r <= last_inner_iter_r;
+            acc_clr_load_r    <= acc_clr_iter_r;
+            wr_addr_load_r    <= wr_addr_iter_r;
+            bias_addr_load_r  <= bias_addr_iter_r;
+        end
+    end
 
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
+        if (!rst_n) begin
             last_inner_d <= 1'b0;
-        else if (pe_accept)
-            last_inner_d <= last_inner_q;
+            wr_addr_d    <= '0;
+        end else if (pe_accept) begin
+            last_inner_d <= last_inner_load_r;
+            wr_addr_d    <= wr_addr_load_r;
+        end
     end
 
     conv_accum u_accum (
         .clk          (clk),
         .rst_n        (rst_n),
-        .clr          (acc_clr_q & pe_accept),
+        .clr          (acc_clr_load_r & pe_accept),
         .acc_en       (pe_valid_out & pe_ready_out),
         .mac_result   (pe_acc_out),
         .acc_out      (acc_out_val),
@@ -209,8 +230,8 @@ module gemm_backend
     );
 
     // Bias fetch: issue read when the last-inner iteration is accepted by PE
-    assign bias_rd_addr = bias_addr_q;
-    assign bias_rd_req  = last_inner_q & pe_accept;
+    assign bias_rd_addr = bias_addr_load_r;
+    assign bias_rd_req  = last_inner_load_r & pe_accept;
 
     // pp_trigger fires when the PE outputs the result of a last-inner iteration
     logic pp_trigger;
@@ -233,9 +254,11 @@ module gemm_backend
             bias_val <= bias_rd_rdata;
     end
 
-    // PE backpressure: stall when processing a last-inner result
+    // PE backpressure: stall when processing a last-inner result.
+    // Keep write-address metadata and postproc data in lockstep.
     logic pp_in_ready;
-    assign pe_ready_out = last_inner_d ? pp_in_ready : 1'b1;
+    logic wr_addr_in_ready;
+    assign pe_ready_out = last_inner_d ? (pp_in_ready & wr_addr_in_ready) : 1'b1;
 
     // postproc (reused)
     logic signed [DATA_W-1:0] pp_out_data;
@@ -259,17 +282,18 @@ module gemm_backend
     logic [ADDR_W-1:0]  wr_out_addr;
     logic               wr_addr_valid;
 
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            wr_out_addr   <= '0;
-            wr_addr_valid <= 1'b0;
-        end else if (pp_trigger) begin
-            wr_out_addr   <= wr_addr_q;
-            wr_addr_valid <= 1'b1;
-        end else if (pp_out_valid && pp_out_ready) begin
-            wr_addr_valid <= 1'b0;
-        end
-    end
+    skid_buffer #(
+        .DATA_W (ADDR_W)
+    ) u_wr_addr_q (
+        .clk       (clk),
+        .rst_n     (rst_n),
+        .in_data   (wr_addr_d),
+        .in_valid  (pp_trigger),
+        .in_ready  (wr_addr_in_ready),
+        .out_data  (wr_out_addr),
+        .out_valid (wr_addr_valid),
+        .out_ready (pp_out_valid & pp_out_ready)
+    );
 
     /* verilator lint_off UNUSEDSIGNAL */
     logic wr_mem_wr;

@@ -16,9 +16,9 @@ struct PerfSnapshot
     uint32_t stall;
 };
 
-static PerfSnapshot run_and_measure(NpuTb &tb,
-                                    const std::vector<int8_t> &act,
-                                    const std::vector<int8_t> &wt,
+static PerfSnapshot run_and_measure(NpuTb& tb,
+                                    const std::vector<int8_t>& act,
+                                    const std::vector<int8_t>& wt,
                                     int H, int W, int C, int K,
                                     int R, int S,
                                     int sh, int sw, int ph, int pw,
@@ -63,7 +63,7 @@ static PerfSnapshot run_and_measure(NpuTb &tb,
 }
 
 // Test: perf counters increment
-static bool test_perf_counters_increment(TestResult &r)
+static bool test_perf_counters_increment(TestResult& r)
 {
     printf("[test] perf_counters_increment\n");
     NpuTb tb("sim/waves/perf_tests.vcd");
@@ -103,7 +103,7 @@ static bool test_perf_counters_increment(TestResult &r)
 
 // Test: cycle count scales with problem size
 //   A 5x5 conv should take more cycles than a 4x4 conv.
-static bool test_perf_scales_with_size(TestResult &r)
+static bool test_perf_scales_with_size(TestResult& r)
 {
     printf("[test] perf_scales_with_size\n");
     bool pass = true;
@@ -139,7 +139,7 @@ static bool test_perf_scales_with_size(TestResult &r)
 }
 
 // Test: soft reset clears perf counters
-static bool test_perf_reset_clears(TestResult &r)
+static bool test_perf_reset_clears(TestResult& r)
 {
     printf("[test] perf_reset_clears\n");
     NpuTb tb;

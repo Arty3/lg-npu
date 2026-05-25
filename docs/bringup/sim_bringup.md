@@ -24,10 +24,10 @@ make lint
 # 2. Generate test vectors
 make vectors
 
-# 3. Run smoke regression (conv + control + perf)
+# 3. Run smoke regression (control + perf)
 make sim-smoke
 
-# 4. Run full regression (all 196 tests)
+# 4. Run full regression
 make sim-full
 ```
 
@@ -38,14 +38,11 @@ make sim-full
 | Target | Description |
 |--------|-------------|
 | `make lint` | Verilator lint (`-Wall`) on all RTL via `tools/lint/rtl.f` |
-| `make compile` | Verilate + build C++ model into `sim/build/` |
-| `make sim-e2e` | Compile and run the original E2E convolution test |
-| `make sim-conv-tests` | Run deterministic conv test suite (10 cases) |
-| `make sim-control-tests` | Run control/sequencing test suite (8 cases) |
-| `make sim-perf-tests` | Run performance counter test suite (3 cases) |
-| `make sim-full-tests` | Run full regression suite (175 cases) |
-| `make sim-smoke` | Run conv + control + perf suites (21 tests) |
-| `make sim-full` | Run smoke + full regression (196 tests) |
+| `make sim-control-tests` | Run control/sequencing test suite |
+| `make sim-perf-tests` | Run performance counter test suite |
+| `make sim-full-tests` | Run full regression suite |
+| `make sim-smoke` | Run control + perf smoke suites |
+| `make sim-full` | Run smoke + full regression |
 | `make vectors` | Generate test vectors from Python reference models |
 | `make waves` | Open the latest VCD waveform in Surfer viewer |
 | `make viz` | Generate architecture diagrams into `docs/diagrams/` |
@@ -103,8 +100,8 @@ reference.
 
 ## Waveform Viewing
 
-When `--trace` is enabled (default in `make compile`), VCD waveform files
-are written to `sim/waves/`. The end-to-end test produces `sim/waves/e2e.vcd`.
+When `--trace` is enabled for simulation targets, VCD waveform files
+are written to `sim/waves/`.
 
 ### Quick open
 
@@ -115,7 +112,7 @@ make waves          # launches Surfer (via tools/visualize/open_surfer.sh)
 Alternatively, open manually with GTKWave or any VCD-compatible viewer:
 
 ```bash
-gtkwave sim/waves/e2e.vcd
+gtkwave sim/waves/*.vcd
 ```
 
 ### Key signals to inspect

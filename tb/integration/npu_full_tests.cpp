@@ -54,11 +54,11 @@ static bool fits(int H, int W, int C, int K, int R, int S,
 }
 
 // Fill helpers
-static std::vector<int8_t> rand_fill(int count, std::mt19937 &rng)
+static std::vector<int8_t> rand_fill(int count, std::mt19937& rng)
 {
     std::uniform_int_distribution<int> dist(-128, 127);
     std::vector<int8_t> v(count);
-    for (auto &x : v) x = static_cast<int8_t>(dist(rng));
+    for (auto& x : v) x = static_cast<int8_t>(dist(rng));
     return v;
 }
 
@@ -78,11 +78,11 @@ static std::vector<int8_t> seq_fill(int count, int8_t start = 1)
 // Run a convolution through the harness and verify against C++ reference.
 // Automatically places output after input in the activation buffer.
 static bool run_test(
-    NpuTb &tb,
-    const char *name,
-    const std::vector<int8_t> &act,
-    const std::vector<int8_t> &wt,
-    const std::vector<int8_t> &bias,
+    NpuTb& tb,
+    const char* name,
+    const std::vector<int8_t>& act,
+    const std::vector<int8_t>& wt,
+    const std::vector<int8_t>& bias,
     int H, int W, int C, int K, int R, int S,
     int sh, int sw, int ph, int pw,
     int qshift,
@@ -105,7 +105,7 @@ static bool run_test(
 }
 
 // Section 1: Randomized convolution sweeps
-static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
+static void run_randomized_sweeps(TestResult& r, int count, uint32_t seed)
 {
     printf("\n--- Randomized Conv Sweeps (seed=%u, n=%d) ---\n\n", seed, count);
     std::mt19937 rng(seed);
@@ -169,7 +169,7 @@ static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
         uint32_t act_mode = (am == 0) ? ACT_MODE_RELU
                           : (am == 1) ? ACT_MODE_NONE
                           :             ACT_MODE_LEAKY_RELU;
-        const char *am_tag = (act_mode == ACT_MODE_RELU) ? "relu"
+        const char* am_tag = (act_mode == ACT_MODE_RELU) ? "relu"
                            : (act_mode == ACT_MODE_NONE) ? "none"
                            :                               "leaky";
 
@@ -189,7 +189,7 @@ static void run_randomized_sweeps(TestResult &r, int count, uint32_t seed)
 }
 
 // Section 2: Edge-value / saturation distribution tests
-static void run_edge_value_tests(TestResult &r)
+static void run_edge_value_tests(TestResult& r)
 {
     printf("\n--- Edge-Value Distribution Tests ---\n\n");
 
@@ -377,7 +377,7 @@ static void run_edge_value_tests(TestResult &r)
 }
 
 // Section 3: Dimension sweeps
-static void run_dimension_sweeps(TestResult &r)
+static void run_dimension_sweeps(TestResult& r)
 {
     printf("\n--- Dimension Sweeps ---\n\n");
 
@@ -401,7 +401,7 @@ static void run_dimension_sweeps(TestResult &r)
 
     // 3b: Non-square inputs
     int ns_cases[][2] = {{3,5}, {5,3}, {1,8}, {8,1}, {2,7}, {7,2}, {4,6}, {6,4}};
-    for (auto &c : ns_cases)
+    for (auto& c : ns_cases)
     {
         int H = c[0], W = c[1];
         int R = std::min(H, 3), S = std::min(W, 3);
@@ -609,7 +609,7 @@ static void run_dimension_sweeps(TestResult &r)
 }
 
 // Section 9: LayerNorm tests
-static void run_lnorm_tests(TestResult &r)
+static void run_lnorm_tests(TestResult& r)
 {
     printf("\n--- LayerNorm Tests ---\n\n");
 
@@ -738,7 +738,7 @@ static void run_lnorm_tests(TestResult &r)
 }
 
 // Section 10: Pooling tests
-static void run_pool_tests(TestResult &r)
+static void run_pool_tests(TestResult& r)
 {
     printf("\n--- Pooling Tests ---\n\n");
 
@@ -852,7 +852,7 @@ static void run_pool_tests(TestResult &r)
         tb.enable();
         std::vector<int8_t> input(4 * 4 * 2);
         std::uniform_int_distribution<int> dist(-128, 127);
-        for (auto &x : input) x = static_cast<int8_t>(dist(rng));
+        for (auto& x : input) x = static_cast<int8_t>(dist(rng));
         r.record(tb.run_pool_test("maxpool rand 4x4x2 k2 s2",
                                   input, 4, 4, 2, 2, 2, 2, 2, 0, 0, 0));
     }
@@ -865,7 +865,7 @@ static void run_pool_tests(TestResult &r)
         tb.enable();
         std::vector<int8_t> input(3 * 3 * 2);
         std::uniform_int_distribution<int> dist(-128, 127);
-        for (auto &x : input) x = static_cast<int8_t>(dist(rng));
+        for (auto& x : input) x = static_cast<int8_t>(dist(rng));
         r.record(tb.run_pool_test("avgpool rand 3x3x2 k2 s1",
                                   input, 3, 3, 2, 2, 2, 1, 1, 0, 0, 1));
     }
@@ -904,7 +904,7 @@ static void run_pool_tests(TestResult &r)
 }
 
 // Section 4: Invalid-command and error-path tests
-static void run_invalid_command_tests(TestResult &r)
+static void run_invalid_command_tests(TestResult& r)
 {
     printf("\n--- Invalid-Command Combinations ---\n\n");
 
@@ -1171,7 +1171,7 @@ static void run_invalid_command_tests(TestResult &r)
 }
 
 // Section 5: Activation function tests
-static void run_activation_tests(TestResult &r)
+static void run_activation_tests(TestResult& r)
 {
     printf("\n--- Activation Function Tests ---\n\n");
 
@@ -1298,7 +1298,7 @@ static void run_activation_tests(TestResult &r)
 }
 
 // Section 6: GEMM tests
-static void run_gemm_tests(TestResult &r)
+static void run_gemm_tests(TestResult& r)
 {
     printf("\n--- GEMM Tests ---\n\n");
 
@@ -1425,7 +1425,7 @@ static void run_gemm_tests(TestResult &r)
 }
 
 // Section 7: Softmax tests
-static void run_softmax_tests(TestResult &r)
+static void run_softmax_tests(TestResult& r)
 {
     printf("\n--- Softmax Tests ---\n\n");
 
@@ -1544,7 +1544,7 @@ static void run_softmax_tests(TestResult &r)
 }
 
 // Section 8: Vec (element-wise) tests
-static void run_vec_tests(TestResult &r)
+static void run_vec_tests(TestResult& r)
 {
     printf("\n--- Vec (Element-Wise) Tests ---\n\n");
 
@@ -1667,7 +1667,7 @@ static void run_vec_tests(TestResult &r)
 }
 
 // Section 11: DMA tests
-static void run_dma_tests(TestResult &r)
+static void run_dma_tests(TestResult& r)
 {
     printf("\n--- DMA Tests ---\n\n");
 
@@ -1893,7 +1893,7 @@ static void run_dma_tests(TestResult &r)
 
         std::uniform_int_distribution<int> dist(-128, 127);
         std::vector<int8_t> data(32);
-        for (auto &x : data) x = static_cast<int8_t>(dist(rng));
+        for (auto& x : data) x = static_cast<int8_t>(dist(rng));
 
         // DMA read into act buffer
         bool rd_ok = tb.run_dma_read_test("dma round-trip (read)",
@@ -1945,7 +1945,7 @@ int main(int argc, char **argv)
 
     // Parse optional seed from environment
     uint32_t seed = 42;
-    const char *seed_env = std::getenv("NPU_TEST_SEED");
+    const char* seed_env = std::getenv("NPU_TEST_SEED");
     if (seed_env) seed = static_cast<uint32_t>(std::stoul(seed_env));
 
     run_randomized_sweeps(r, 50, seed);

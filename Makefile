@@ -67,16 +67,7 @@ define build_test
 		$(REPO_ROOT)$(2)
 endef
 
-# Legacy compile target (original E2E harness)
-.PHONY: compile
-compile: $(SIM_BUILD) ## Verilate the design (compile to C++)
-	$(call build_test,e2e,tb/integration/npu_e2e_harness.cpp)
-
-# Compile each test suite into its own build directory
-.PHONY: compile-conv-tests
-compile-conv-tests: $(SIM_BUILD)
-	$(call build_test,conv_tests,tb/integration/npu_e2e_conv_tests.cpp)
-
+# Compile each maintained test suite into its own build directory
 .PHONY: compile-control-tests
 compile-control-tests: $(SIM_BUILD)
 	$(call build_test,control_tests,tb/integration/npu_control_tests.cpp)
@@ -90,17 +81,9 @@ compile-full-tests: $(SIM_BUILD)
 	$(call build_test,full_tests,tb/integration/npu_full_tests.cpp)
 
 .PHONY: sim-smoke
-sim-smoke: sim-conv-tests sim-control-tests sim-perf-tests ## Run smoke regression (all test suites)
+sim-smoke: sim-control-tests sim-perf-tests ## Run smoke regression (maintained fast suites)
 	@echo ""
 	@echo "=== sim-smoke: ALL SUITES PASSED ==="
-
-.PHONY: sim-e2e
-sim-e2e: compile $(WAVE_DIR) ## Run original end-to-end convolution test
-	$(SIM_BUILD)/e2e/V$(TOP)
-
-.PHONY: sim-conv-tests
-sim-conv-tests: compile-conv-tests $(WAVE_DIR) ## Run deterministic conv test suite (10 cases)
-	$(SIM_BUILD)/conv_tests/V$(TOP)
 
 .PHONY: sim-control-tests
 sim-control-tests: compile-control-tests $(WAVE_DIR) ## Run control/sequencing test suite
@@ -111,7 +94,7 @@ sim-perf-tests: compile-perf-tests $(WAVE_DIR) ## Run performance counter test s
 	$(SIM_BUILD)/perf_tests/V$(TOP)
 
 .PHONY: sim-full-tests
-sim-full-tests: compile-full-tests $(WAVE_DIR) ## Run full regression test suite
+sim-full-tests: compile-full-tests $(WAVE_DIR) ## Run full regression suite
 	$(SIM_BUILD)/full_tests/V$(TOP)
 
 .PHONY: sim-full

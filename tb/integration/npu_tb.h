@@ -65,11 +65,20 @@ struct ConvDesc
     uint32_t filt_r, filt_s;
     uint32_t stride_h, stride_w;
     uint32_t pad_h, pad_w;
+    uint32_t out_h, out_w;
     uint32_t quant_shift;
     uint32_t act_mode;      // 0=None (default), 1=ReLU, 2=Leaky ReLU
 
     void to_words(uint32_t out[16]) const
     {
+        uint32_t oh = out_h;
+        uint32_t ow = out_w;
+
+        if (oh == 0 && stride_h != 0)
+            oh = ((in_h + (2 * pad_h) - filt_r) / stride_h) + 1;
+        if (ow == 0 && stride_w != 0)
+            ow = ((in_w + (2 * pad_w) - filt_s) / stride_w) + 1;
+
         out[0]  = opcode;
         out[1]  = act_in_addr;
         out[2]  = act_out_addr;
@@ -83,8 +92,8 @@ struct ConvDesc
         out[10] = filt_s;
         out[11] = stride_h;
         out[12] = stride_w;
-        out[13] = pad_h;
-        out[14] = pad_w;
+        out[13] = (pad_h & 0xFFFFu) | ((oh & 0xFFFFu) << 16);
+        out[14] = (pad_w & 0xFFFFu) | ((ow & 0xFFFFu) << 16);
         out[15] = (quant_shift & 0x1F) | ((act_mode & 0x3) << 5);
     }
 };
@@ -200,10 +209,20 @@ struct PoolDesc
     uint32_t stride_w  = 0;
     uint32_t pad_h     = 0;
     uint32_t pad_w     = 0;
+    uint32_t out_h     = 0;
+    uint32_t out_w     = 0;
     uint32_t pool_mode = 0;  // 0=MAX, 1=AVG
 
     void to_words(uint32_t out[16]) const
     {
+        uint32_t oh = out_h;
+        uint32_t ow = out_w;
+
+        if (oh == 0 && stride_h != 0)
+            oh = ((in_h + (2 * pad_h) - pool_r) / stride_h) + 1;
+        if (ow == 0 && stride_w != 0)
+            ow = ((in_w + (2 * pad_w) - pool_s) / stride_w) + 1;
+
         std::memset(out, 0, sizeof(uint32_t) * 16);
         out[0]  = opcode;
         out[1]  = in_addr;
@@ -215,8 +234,8 @@ struct PoolDesc
         out[10] = pool_s;
         out[11] = stride_h;
         out[12] = stride_w;
-        out[13] = pad_h;
-        out[14] = pad_w;
+        out[13] = (pad_h & 0xFFFFu) | ((oh & 0xFFFFu) << 16);
+        out[14] = (pad_w & 0xFFFFu) | ((ow & 0xFFFFu) << 16);
         out[15] = pool_mode & 0x1;
     }
 };
@@ -247,7 +266,7 @@ inline uint16_t isqrt_hw(uint32_t n)
 //   Per row: mean = sum/N, var = sum((x-mean)^2)/N,
 //   std = isqrt(var+1), out = clamp(((x-mean)<<shift)/std, -128, 127)
 inline std::vector<int8_t> ref_lnorm(
-    const std::vector<int8_t> &input,
+    const std::vector<int8_t>& input,
     int num_rows, int row_len,
     int norm_shift)
 {
@@ -315,7 +334,7 @@ inline std::vector<int8_t> ref_lnorm(
 //   pool_mode=0: MAX pool, pool_mode=1: AVG pool
 //   2D spatial pooling over NHWC data with stride and padding.
 inline std::vector<int8_t> ref_pool(
-    const std::vector<int8_t> &input,
+    const std::vector<int8_t>& input,
     int H, int W, int C,
     int pool_r, int pool_s,
     int stride_h, int stride_w,
@@ -399,9 +418,9 @@ static constexpr int LEAKY_SHIFT = 3;
 // C++ reference GEMM: C = A * B + bias (INT8 -> INT32 accum -> INT8 out)
 //   A is row-major M x K, B is row-major K x N, bias is length N.
 inline std::vector<int8_t> ref_gemm(
-    const std::vector<int8_t> &a,
-    const std::vector<int8_t> &b,
-    const std::vector<int8_t> &bias,
+    const std::vector<int8_t>& a,
+    const std::vector<int8_t>& b,
+    const std::vector<int8_t>& bias,
     int M, int N, int K,
     int quant_shift,
     uint32_t act_mode = ACT_MODE_NONE)
@@ -439,9 +458,9 @@ inline std::vector<int8_t> ref_gemm(
 
 // C++ reference convolution (INT8 in -> INT32 accum -> INT8 out)
 inline std::vector<int8_t> ref_conv(
-    const std::vector<int8_t> &act,
-    const std::vector<int8_t> &wt,
-    const std::vector<int8_t> &bias,
+    const std::vector<int8_t>& act,
+    const std::vector<int8_t>& wt,
+    const std::vector<int8_t>& bias,
     int H, int W, int C, int K, int R, int S,
     int stride_h, int stride_w, int pad_h, int pad_w,
     int quant_shift,
@@ -521,7 +540,7 @@ inline uint16_t softmax_exp_approx(uint8_t diff)
 //   Uses same two-table exp LUT decomposition as hardware for
 //   bit-exact matching.
 inline std::vector<int8_t> ref_softmax(
-    const std::vector<int8_t> &input,
+    const std::vector<int8_t>& input,
     int num_rows, int row_len)
 {
     std::vector<int8_t> out(num_rows * row_len);
@@ -559,8 +578,8 @@ inline std::vector<int8_t> ref_softmax(
 //   vec_op=0: C[i] = clamp(A[i] + B[i], -128, 127)
 //   vec_op!=0: C[i] = quantize(activate(A[i]*B[i], mode), shift)
 inline std::vector<int8_t> ref_vec(
-    const std::vector<int8_t> &a,
-    const std::vector<int8_t> &b,
+    const std::vector<int8_t>& a,
+    const std::vector<int8_t>& b,
     int length,
     uint32_t vec_op,
     int quant_shift = 0,
@@ -644,7 +663,7 @@ class NpuTb
     }
 
 public:
-    explicit NpuTb(const char *vcd_path = nullptr)
+    explicit NpuTb(const char* vcd_path = nullptr)
         : sim_time(0), trace_enabled(vcd_path != nullptr),
           ext_rd_pending(false), ext_rd_addr_pending(0)
     {
@@ -764,7 +783,7 @@ public:
                        static_cast<uint32_t>(static_cast<uint8_t>(data[i])));
     }
 
-    void load_bytes(uint32_t mmio_base, const std::vector<int8_t> &data)
+    void load_bytes(uint32_t mmio_base, const std::vector<int8_t>& data)
     {
         load_bytes(mmio_base, data.data(), static_cast<int>(data.size()));
     }
@@ -870,10 +889,10 @@ public:
     // Run a convolution end-to-end: load data, fire command, wait, read back.
     // Returns true on match with expected output.
     bool run_conv_test(
-        const char *name,
-        const std::vector<int8_t> &act,
-        const std::vector<int8_t> &wt,
-        const std::vector<int8_t> &bias,
+        const char* name,
+        const std::vector<int8_t>& act,
+        const std::vector<int8_t>& wt,
+        const std::vector<int8_t>& bias,
         int H, int W, int C, int K, int R, int S,
         int sh, int sw, int ph, int pw,
         int qshift,
@@ -955,10 +974,10 @@ public:
     // Run a GEMM end-to-end: load data, fire command, wait, read back.
     // Returns true on match with expected output.
     bool run_gemm_test(
-        const char *name,
-        const std::vector<int8_t> &a,
-        const std::vector<int8_t> &b,
-        const std::vector<int8_t> &bias,
+        const char* name,
+        const std::vector<int8_t>& a,
+        const std::vector<int8_t>& b,
+        const std::vector<int8_t>& bias,
         int M, int N, int K,
         int qshift,
         uint32_t act_mode  = ACT_MODE_NONE,
@@ -1026,8 +1045,8 @@ public:
 
     // Run a softmax end-to-end: load data, fire command, wait, read back.
     bool run_softmax_test(
-        const char *name,
-        const std::vector<int8_t> &input,
+        const char* name,
+        const std::vector<int8_t>& input,
         int num_rows, int row_len,
         uint32_t in_addr  = 0,
         uint32_t out_addr = 2048)
@@ -1068,9 +1087,9 @@ public:
 
     // Run a vec op end-to-end: load data, fire command, wait, read back.
     bool run_vec_test(
-        const char *name,
-        const std::vector<int8_t> &a,
-        const std::vector<int8_t> &b,
+        const char* name,
+        const std::vector<int8_t>& a,
+        const std::vector<int8_t>& b,
         int length,
         uint32_t vec_op,
         int qshift            = 0,
@@ -1119,8 +1138,8 @@ public:
 
     // Run a lnorm op end-to-end: load data, fire command, wait, read back.
     bool run_lnorm_test(
-        const char *name,
-        const std::vector<int8_t> &input,
+        const char* name,
+        const std::vector<int8_t>& input,
         int num_rows, int row_len,
         int norm_shift,
         uint32_t in_addr  = 0,
@@ -1163,8 +1182,8 @@ public:
 
     // Run a pool op end-to-end: load data, fire command, wait, read back.
     bool run_pool_test(
-        const char *name,
-        const std::vector<int8_t> &input,
+        const char* name,
+        const std::vector<int8_t>& input,
         int H, int W, int C,
         int pool_r, int pool_s,
         int sh, int sw,
@@ -1235,7 +1254,7 @@ public:
                 static_cast<uint32_t>(static_cast<uint8_t>(data[i]));
     }
 
-    void ext_load_bytes(uint32_t base, const std::vector<int8_t> &data)
+    void ext_load_bytes(uint32_t base, const std::vector<int8_t>& data)
     {
         ext_load_bytes(base, data.data(), static_cast<int>(data.size()));
     }
@@ -1269,8 +1288,8 @@ public:
     // Run a DMA read test: load data into ext memory, DMA to local buffer,
     // read back via MMIO and compare.
     bool run_dma_read_test(
-        const char *name,
-        const std::vector<int8_t> &data,
+        const char* name,
+        const std::vector<int8_t>& data,
         uint32_t ext_addr,
         uint32_t loc_mmio_addr)
     {
@@ -1309,8 +1328,8 @@ public:
     // Run a DMA write test: load data into local buffer via MMIO, DMA to ext
     // memory, read back from ext model and compare.
     bool run_dma_write_test(
-        const char *name,
-        const std::vector<int8_t> &data,
+        const char* name,
+        const std::vector<int8_t>& data,
         uint32_t loc_mmio_addr,
         uint32_t ext_addr)
     {
@@ -1363,7 +1382,7 @@ struct TestResult
 
     int exit_code() const { return failed > 0 ? 1 : 0; }
 
-    void summary(const char *suite) const
+    void summary(const char* suite) const
     {
         printf("\n=== %s: %d/%d passed", suite, passed, total);
         if (failed > 0) printf(" (%d FAILED)", failed);
