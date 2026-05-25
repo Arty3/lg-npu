@@ -19,11 +19,11 @@
   .splitjoinBody {
     fill:#000;
   }</style>
-  <g s:type="and" transform="translate(1608.6666666666667,7700.5)" s:width="30" s:height="25" id="cell_$and$/tmp/tmp_ak_covd.v:804$223">
+  <g s:type="and" transform="translate(1608.6666666666667,7700.5)" s:width="30" s:height="25" id="cell_$and$/tmp/tmp1t7vlsqx.v:804$223">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmp_ak_covd.v:804$223"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmp1t7vlsqx.v:804$223"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
@@ -44,103 +44,103 @@
       <text x="-3" y="-4" class="inputPortLabel cell_$auto$proc_memwr.cc:45:proc_memwr$1793">EN</text>
     </g>
   </g>
-  <g s:type="ge" transform="translate(1016.6666666666666,7232.5)" s:width="25" s:height="25" id="cell_$ge$/tmp/tmp_ak_covd.v:674$188">
+  <g s:type="ge" transform="translate(1016.6666666666666,7232.5)" s:width="25" s:height="25" id="cell_$ge$/tmp/tmp1t7vlsqx.v:674$188">
     <s:alias val="$ge"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:674$188"/>
-    <line x1="7.5" x2="17.5" y1="7.5" y2="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:674$188"/>
-    <line x1="7.5" x2="17.5" y1="17.5" y2="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:674$188"/>
-    <line x1="7.5" x2="17.5" y1="20" y2="15" class="cell_$ge$/tmp/tmp_ak_covd.v:674$188"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:674$188"/>
+    <line x1="7.5" x2="17.5" y1="7.5" y2="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:674$188"/>
+    <line x1="7.5" x2="17.5" y1="17.5" y2="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:674$188"/>
+    <line x1="7.5" x2="17.5" y1="20" y2="15" class="cell_$ge$/tmp/tmp1t7vlsqx.v:674$188"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="ge" transform="translate(1359.3333333333333,7355)" s:width="25" s:height="25" id="cell_$ge$/tmp/tmp_ak_covd.v:675$191">
+  <g s:type="ge" transform="translate(1359.3333333333333,7355)" s:width="25" s:height="25" id="cell_$ge$/tmp/tmp1t7vlsqx.v:675$191">
     <s:alias val="$ge"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:675$191"/>
-    <line x1="7.5" x2="17.5" y1="7.5" y2="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:675$191"/>
-    <line x1="7.5" x2="17.5" y1="17.5" y2="12.5" class="cell_$ge$/tmp/tmp_ak_covd.v:675$191"/>
-    <line x1="7.5" x2="17.5" y1="20" y2="15" class="cell_$ge$/tmp/tmp_ak_covd.v:675$191"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:675$191"/>
+    <line x1="7.5" x2="17.5" y1="7.5" y2="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:675$191"/>
+    <line x1="7.5" x2="17.5" y1="17.5" y2="12.5" class="cell_$ge$/tmp/tmp1t7vlsqx.v:675$191"/>
+    <line x1="7.5" x2="17.5" y1="20" y2="15" class="cell_$ge$/tmp/tmp1t7vlsqx.v:675$191"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(1195,7240)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp_ak_covd.v:674$190">
+  <g s:type="and" transform="translate(1195,7240)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp1t7vlsqx.v:674$190">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp_ak_covd.v:674$190"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp1t7vlsqx.v:674$190"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(1015,6902)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp_ak_covd.v:723$194">
+  <g s:type="and" transform="translate(1015,6902)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp1t7vlsqx.v:723$194">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp_ak_covd.v:723$194"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp1t7vlsqx.v:723$194"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(1195,6909.5)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp_ak_covd.v:723$195">
+  <g s:type="and" transform="translate(1195,6909.5)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp1t7vlsqx.v:723$195">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp_ak_covd.v:723$195"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp1t7vlsqx.v:723$195"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(1195,7180)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp_ak_covd.v:746$202">
+  <g s:type="and" transform="translate(1195,7180)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp1t7vlsqx.v:746$202">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp_ak_covd.v:746$202"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp1t7vlsqx.v:746$202"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(1357.6666666666667,7187.5)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp_ak_covd.v:746$203">
+  <g s:type="and" transform="translate(1357.6666666666667,7187.5)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp1t7vlsqx.v:746$203">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp_ak_covd.v:746$203"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp1t7vlsqx.v:746$203"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="lt" transform="translate(1016.6666666666666,6962)" s:width="25" s:height="25" id="cell_$lt$/tmp/tmp_ak_covd.v:672$187">
+  <g s:type="lt" transform="translate(1016.6666666666666,6962)" s:width="25" s:height="25" id="cell_$lt$/tmp/tmp1t7vlsqx.v:672$187">
     <s:alias val="$lt"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$lt$/tmp/tmp_ak_covd.v:672$187"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="7.5" class="cell_$lt$/tmp/tmp_ak_covd.v:672$187"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="17.5" class="cell_$lt$/tmp/tmp_ak_covd.v:672$187"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:672$187"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="7.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:672$187"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="17.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:672$187"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="lt" transform="translate(1016.6666666666666,7292.5)" s:width="25" s:height="25" id="cell_$lt$/tmp/tmp_ak_covd.v:674$189">
+  <g s:type="lt" transform="translate(1016.6666666666666,7292.5)" s:width="25" s:height="25" id="cell_$lt$/tmp/tmp1t7vlsqx.v:674$189">
     <s:alias val="$lt"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$lt$/tmp/tmp_ak_covd.v:674$189"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="7.5" class="cell_$lt$/tmp/tmp_ak_covd.v:674$189"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="17.5" class="cell_$lt$/tmp/tmp_ak_covd.v:674$189"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:674$189"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="7.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:674$189"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="17.5" class="cell_$lt$/tmp/tmp1t7vlsqx.v:674$189"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="generic" transform="translate(1543,429)" s:width="30" s:height="40" id="cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221">
-    <text x="15" y="-4" class="nodelabel cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221" s:attribute="ref">$memrd</text>
-    <rect width="30" height="60" s:generic="body" class="cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221"/>
-    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221~ADDR">
-      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221">ADDR</text>
+  <g s:type="generic" transform="translate(1543,429)" s:width="30" s:height="40" id="cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221">
+    <text x="15" y="-4" class="nodelabel cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221" s:attribute="ref">$memrd</text>
+    <rect width="30" height="60" s:generic="body" class="cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221"/>
+    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221~ADDR">
+      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221">ADDR</text>
     </g>
-    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221~CLK">
-      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221">CLK</text>
+    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221~CLK">
+      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221">CLK</text>
     </g>
-    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221~EN">
-      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221">EN</text>
+    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221~EN">
+      <text x="-3" y="-4" class="inputPortLabel cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221">EN</text>
     </g>
-    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221~DATA">
-      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$memrd$\cmd_mem$/tmp/tmp_ak_covd.v:758$221">DATA</text>
+    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221~DATA">
+      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$memrd$\cmd_mem$/tmp/tmp1t7vlsqx.v:758$221">DATA</text>
     </g>
   </g>
   <g s:type="generic" transform="translate(1350,1002.5)" s:width="30" s:height="40" id="cell_$procdff$1774">
@@ -1055,47 +1055,47 @@
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="sub" transform="translate(1196.6666666666667,7120)" s:width="25" s:height="25" id="cell_$sub$/tmp/tmp_ak_covd.v:747$209">
+  <g s:type="sub" transform="translate(1196.6666666666667,7120)" s:width="25" s:height="25" id="cell_$sub$/tmp/tmp1t7vlsqx.v:747$209">
     <s:alias val="$sub"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$sub$/tmp/tmp_ak_covd.v:747$209"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="12.5" class="cell_$sub$/tmp/tmp_ak_covd.v:747$209"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$sub$/tmp/tmp1t7vlsqx.v:747$209"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="12.5" class="cell_$sub$/tmp/tmp1t7vlsqx.v:747$209"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="sub" transform="translate(1196.6666666666667,4712.5)" s:width="25" s:height="25" id="cell_$sub$/tmp/tmp_ak_covd.v:758$219">
+  <g s:type="sub" transform="translate(1196.6666666666667,4712.5)" s:width="25" s:height="25" id="cell_$sub$/tmp/tmp1t7vlsqx.v:758$219">
     <s:alias val="$sub"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$sub$/tmp/tmp_ak_covd.v:758$219"/>
-    <line x1="7.5" x2="17.5" y1="12.5" y2="12.5" class="cell_$sub$/tmp/tmp_ak_covd.v:758$219"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$sub$/tmp/tmp1t7vlsqx.v:758$219"/>
+    <line x1="7.5" x2="17.5" y1="12.5" y2="12.5" class="cell_$sub$/tmp/tmp1t7vlsqx.v:758$219"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(1361,7476)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp_ak_covd.v:811$226">
+  <g s:type="mux" transform="translate(1361,7476)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp1t7vlsqx.v:811$226">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp_ak_covd.v:811$226"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp1t7vlsqx.v:811$226"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(1612,7317.5)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp_ak_covd.v:811$227">
+  <g s:type="mux" transform="translate(1612,7317.5)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp1t7vlsqx.v:811$227">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp_ak_covd.v:811$227"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp1t7vlsqx.v:811$227"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(1612,32)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp_ak_covd.v:812$228">
+  <g s:type="mux" transform="translate(1612,32)" s:width="20" s:height="40" id="cell_$ternary$/tmp/tmp1t7vlsqx.v:812$228">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp_ak_covd.v:812$228"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$ternary$/tmp/tmp1t7vlsqx.v:812$228"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
