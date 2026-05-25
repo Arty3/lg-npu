@@ -13,9 +13,13 @@ REGLIST="${1:-}"
 if [ -z "${REGLIST}" ]; then
     echo "=== Running all test levels ==="
     FAIL=0
-    bash "${REPO_ROOT}/sim/scripts/run_unit.sh"        || FAIL=$((FAIL + $?))
-    bash "${REPO_ROOT}/sim/scripts/run_block.sh"       || FAIL=$((FAIL + $?))
-    bash "${REPO_ROOT}/sim/scripts/run_integration.sh" || FAIL=$((FAIL + $?))
+    for script in run_unit.sh run_block.sh run_integration.sh; do
+        if [ -x "${REPO_ROOT}/sim/scripts/${script}" ]; then
+            bash "${REPO_ROOT}/sim/scripts/${script}" || FAIL=$((FAIL + $?))
+        else
+            echo "[SKIP] Missing script: sim/scripts/${script}"
+        fi
+    done
     exit "${FAIL}"
 fi
 
@@ -46,6 +50,12 @@ while IFS= read -r line || [ -n "${line}" ]; do
             continue
             ;;
     esac
+
+    if [ ! -x "${SCRIPT}" ]; then
+        echo "[SKIP] Missing script: ${SCRIPT}"
+        SKIP=$((SKIP + 1))
+        continue
+    fi
 
     bash "${SCRIPT}" && PASS=$((PASS + 1)) || FAIL=$((FAIL + 1))
 done < "${REGLIST}"

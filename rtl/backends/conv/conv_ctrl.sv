@@ -70,6 +70,8 @@ module conv_ctrl
     logic inner_last;  // last (r,s,c)
     logic outer_last;  // last (oh,ow,k)
     logic advance;
+    logic last_c, last_s, last_r;
+    logic last_k, last_ow;
 
     // State register
     always_ff @(posedge clk or negedge rst_n) begin
@@ -78,6 +80,13 @@ module conv_ctrl
         else
             state <= state_next;
     end
+
+`ifdef SIMULATION
+    always_ff @(posedge clk) begin
+        if (rst_n)
+            assert (state inside {IDLE, LOAD_CFG, COMPUTE, DRAIN, DONE});
+    end
+`endif
 
     // Next-state logic
     always_comb begin
@@ -101,14 +110,17 @@ module conv_ctrl
         end
     end
 
-    // Derived output dimensions
-    //   OH = (H + 2*pad_h - R) / stride_h + 1
-    //   OW = (W + 2*pad_w - S) / stride_w + 1
-    assign oh_max = (cmd_r.in_h + 2*cmd_r.pad_h - cmd_r.filt_r) / cmd_r.stride_h;
-    assign ow_max = (cmd_r.in_w + 2*cmd_r.pad_w - cmd_r.filt_s) / cmd_r.stride_w;
+    // Host provides output shape to avoid runtime divider inference in RTL.
+    assign oh_max = cmd_r.out_h - 1;
+    assign ow_max = cmd_r.out_w - 1;
 
     // Loop counters
     assign advance    = (state == COMPUTE) && iter_ready;
+    assign last_c     = (c_r  == cmd_r.in_c   - 1);
+    assign last_s     = (s_r  == cmd_r.filt_s - 1);
+    assign last_r     = (r_r  == cmd_r.filt_r - 1);
+    assign last_k     = (k_r  == cmd_r.out_k  - 1);
+    assign last_ow    = (ow_r == ow_max);
     assign inner_last = (r_r == cmd_r.filt_r - 1) &&
                         (s_r == cmd_r.filt_s - 1) &&
                         (c_r == cmd_r.in_c   - 1);
@@ -125,24 +137,24 @@ module conv_ctrl
             r_r  <= '0; s_r  <= '0; c_r <= '0;
         end else if (advance) begin
             // Inner loop: c -> s -> r
-            if (c_r < cmd_r.in_c - 1) begin
+            if (!last_c) begin
                 c_r <= c_r + 1;
             end else begin
                 c_r <= '0;
-                if (s_r < cmd_r.filt_s - 1) begin
+                if (!last_s) begin
                     s_r <= s_r + 1;
                 end else begin
                     s_r <= '0;
-                    if (r_r < cmd_r.filt_r - 1) begin
+                    if (!last_r) begin
                         r_r <= r_r + 1;
                     end else begin
                         r_r <= '0;
                         // Outer loop: k -> ow -> oh
-                        if (k_r < cmd_r.out_k - 1) begin
+                        if (!last_k) begin
                             k_r <= k_r + 1;
                         end else begin
                             k_r <= '0;
-                            if (ow_r < ow_max) begin
+                            if (!last_ow) begin
                                 ow_r <= ow_r + 1;
                             end else begin
                                 ow_r <= '0;
@@ -190,7 +202,7 @@ module conv_ctrl
     assign pad_w       = cmd_r.pad_w;
     assign quant_shift = cmd_r.quant_shift;
     assign act_mode    = cmd_r.act_mode;
-    assign out_h       = oh_max + 1;
-    assign out_w       = ow_max + 1;
+    assign out_h       = cmd_r.out_h;
+    assign out_w       = cmd_r.out_w;
 
 endmodule : conv_ctrl

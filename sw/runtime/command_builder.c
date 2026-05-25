@@ -14,14 +14,53 @@ static void cmd_clear(struct npu_cmd_desc* desc)
     __builtin_memset(desc, 0, sizeof(*desc));
 }
 
+NO_DISCARD ALWAYS_INLINE
+static uint16_t derive_out_dim(
+    const uint16_t in_dim,
+    const uint16_t pad,
+    const uint16_t filt,
+    const uint16_t stride,
+    const uint16_t provided)
+{
+    if (provided)
+        return provided;
+
+    if (UNLIKELY(!stride))
+        return 0;
+
+    return (uint16_t)((
+        (uint32_t)in_dim + (2U * (uint32_t)pad) -
+        (uint32_t)filt)  / (uint32_t)stride + 1U
+    );
+}
+
 int npu_cmd_build_conv(
     struct npu_cmd_desc*          desc,
     const struct npu_conv_params* p)
 {
+    uint16_t out_h;
+    uint16_t out_w;
+
     if (UNLIKELY(!desc || !p))
         return -1;
 
     cmd_clear(desc);
+
+    out_h = derive_out_dim(
+        p->in_h,
+        p->pad_h,
+        p->filt_r,
+        p->stride_h,
+        p->out_h
+    );
+
+    out_w = derive_out_dim(
+        p->in_w,
+        p->pad_w,
+        p->filt_s,
+        p->stride_w,
+        p->out_w
+    );
 
     desc->words[0]  = (uint32_t)LGNPU_OP_CONV;
     desc->words[1]  = p->act_in_addr;
@@ -36,8 +75,8 @@ int npu_cmd_build_conv(
     desc->words[10] = p->filt_s;
     desc->words[11] = p->stride_h;
     desc->words[12] = p->stride_w;
-    desc->words[13] = p->pad_h;
-    desc->words[14] = p->pad_w;
+    desc->words[13] = (uint32_t)p->pad_h | ((uint32_t)out_h << 16);
+    desc->words[14] = (uint32_t)p->pad_w | ((uint32_t)out_w << 16);
     desc->words[15] = (p->quant_shift & 0x1FU)
                     | (((uint32_t)p->act_mode & 0x3U) << 5);
 
@@ -129,10 +168,29 @@ int npu_cmd_build_pool(
     struct npu_cmd_desc*          desc,
     const struct npu_pool_params* p)
 {
+    uint16_t out_h;
+    uint16_t out_w;
+
     if (UNLIKELY(!desc || !p))
         return -1;
 
     cmd_clear(desc);
+
+    out_h = derive_out_dim(
+        p->in_h,
+        p->pad_h,
+        p->pool_r,
+        p->stride_h,
+        p->out_h
+    );
+
+    out_w = derive_out_dim(
+        p->in_w,
+        p->pad_w,
+        p->pool_s,
+        p->stride_w,
+        p->out_w
+    );
 
     desc->words[0]  = (uint32_t)LGNPU_OP_POOL;
     desc->words[1]  = p->in_addr;
@@ -144,8 +202,8 @@ int npu_cmd_build_pool(
     desc->words[10] = p->pool_s;
     desc->words[11] = p->stride_h;
     desc->words[12] = p->stride_w;
-    desc->words[13] = p->pad_h;
-    desc->words[14] = p->pad_w;
+    desc->words[13] = (uint32_t)p->pad_h | ((uint32_t)out_h << 16);
+    desc->words[14] = (uint32_t)p->pad_w | ((uint32_t)out_w << 16);
     desc->words[15] = p->pool_mode & 0x1U;
 
     return 0;

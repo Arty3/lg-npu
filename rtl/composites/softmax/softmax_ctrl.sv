@@ -15,9 +15,7 @@ module softmax_ctrl
     input  logic                rst_n,
 
     // Command interface (from dispatch)
-    /* verilator lint_off UNUSEDSIGNAL */
-    input  conv_cmd_t           cmd,
-    /* verilator lint_on UNUSEDSIGNAL */
+    input  softmax_cmd_t        cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -82,11 +80,9 @@ module softmax_ctrl
     logic [7:0]               div_quot_r;
     logic [4:0]               div_cnt_r;
 
-    // Address helpers
-    logic [ADDR_W-1:0] row_base_in;
-    logic [ADDR_W-1:0] row_base_out;
-    assign row_base_in  = in_base_r  + ADDR_W'(row_r * row_len_r);
-    assign row_base_out = out_base_r + ADDR_W'(row_r * row_len_r);
+    // Address helpers tracked incrementally to avoid row*len multiplies.
+    logic [ADDR_W-1:0] row_base_in_r;
+    logic [ADDR_W-1:0] row_base_out_r;
 
     // State register
     always_ff @(posedge clk or negedge rst_n)
@@ -133,10 +129,10 @@ module softmax_ctrl
             num_rows_r <= '0;
             row_len_r  <= '0;
         end else if (state == S_IDLE && cmd_valid) begin
-            in_base_r  <= cmd.act_in_addr;
-            out_base_r <= cmd.act_out_addr;
-            num_rows_r <= cmd.in_h;
-            row_len_r  <= cmd.in_w;
+            in_base_r  <= cmd.in_addr;
+            out_base_r <= cmd.out_addr;
+            num_rows_r <= cmd.num_rows;
+            row_len_r  <= cmd.row_len;
         end
     end
 
@@ -150,6 +146,21 @@ module softmax_ctrl
         else if (state == S_NORM_WR && out_wr_gnt &&
                  norm_idx_r == row_len_r - 1 && row_r < num_rows_r - 1)
             row_r <= row_r + 1;
+    end
+
+    always_ff @(posedge clk or negedge rst_n)
+    begin
+        if (!rst_n) begin
+            row_base_in_r  <= '0;
+            row_base_out_r <= '0;
+        end else if (state == S_LOAD_CFG) begin
+            row_base_in_r  <= in_base_r;
+            row_base_out_r <= out_base_r;
+        end else if (state == S_NORM_WR && out_wr_gnt &&
+                     norm_idx_r == row_len_r - 1 && row_r < num_rows_r - 1) begin
+            row_base_in_r  <= row_base_in_r  + ADDR_W'(row_len_r);
+            row_base_out_r <= row_base_out_r + ADDR_W'(row_len_r);
+        end
     end
 
     // Request / receive counters (shared between FIND_MAX and EXP_SUM)
@@ -303,15 +314,15 @@ module softmax_ctrl
         act_rd_req  = 1'b0;
         case (state)
             S_FIND_MAX: begin
-                act_rd_addr = row_base_in + ADDR_W'(req_cnt_r);
+                act_rd_addr = row_base_in_r + ADDR_W'(req_cnt_r);
                 act_rd_req  = (req_cnt_r < row_len_r);
             end
             S_EXP_SUM: begin
-                act_rd_addr = row_base_in + ADDR_W'(req_cnt_r);
+                act_rd_addr = row_base_in_r + ADDR_W'(req_cnt_r);
                 act_rd_req  = (req_cnt_r < row_len_r);
             end
             S_NORM_RD: begin
-                act_rd_addr = row_base_in + ADDR_W'(norm_idx_r);
+                act_rd_addr = row_base_in_r + ADDR_W'(norm_idx_r);
                 act_rd_req  = 1'b1;
             end
             default: ;
@@ -319,7 +330,7 @@ module softmax_ctrl
     end
 
     // Memory interface: output write
-    assign out_wr_addr = row_base_out + ADDR_W'(norm_idx_r);
+    assign out_wr_addr = row_base_out_r + ADDR_W'(norm_idx_r);
     assign out_wr_data = norm_result;
     assign out_wr_req  = (state == S_NORM_WR);
 

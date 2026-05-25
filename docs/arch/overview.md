@@ -257,6 +257,30 @@ PE array, or bias port.
 
 ---
 
+## Clocking and CDC Assumptions
+
+Current RTL assumes a single synchronous clock domain for:
+
+- host MMIO path
+- command pipeline
+- backend compute
+- local SRAM interfaces
+- DMA frontend control
+
+For ASIC integration where host/bus and NPU clocks may differ, the following
+CDC work is required before sign-off:
+
+1. Synchronize all control pulses crossing into the NPU domain (`doorbell`,
+   soft-reset release, interrupt clear/enable side effects).
+2. Replace direct valid/ready links across domains with async FIFOs or
+   request/ack synchronizers (command queue and DMA control paths first).
+3. Add CDC-safe wrappers on external-memory request/response channels if
+   `ext_mem_*` is not clocked by `clk`.
+4. Keep reset distribution physically separate from data logic; soft reset
+   deassertion must remain synchronized per destination clock domain.
+
+---
+
 ## Interfaces (`rtl/ifaces/`)
 
 The interface definitions below exist as reusable building blocks. In the

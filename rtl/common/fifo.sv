@@ -26,6 +26,11 @@ module fifo #(
 
     localparam int PTR_W = $clog2(DEPTH);
 
+    initial begin
+        if (DEPTH != (1 << PTR_W))
+            $fatal(1, "fifo DEPTH must be power-of-two, got %0d", DEPTH);
+    end
+
     logic [DATA_W-1:0]  mem [DEPTH];
     logic [PTR_W:0]     wr_ptr, rd_ptr;
     logic               do_wr, do_rd;
@@ -35,7 +40,7 @@ module fifo #(
     assign empty    = (wr_ptr == rd_ptr);
     assign wr_ready = ~full;
     assign rd_valid = ~empty;
-    assign rd_data  = mem[rd_ptr[PTR_W-1:0]];
+    assign rd_data  = empty ? '0 : mem[rd_ptr[PTR_W-1:0]];
 
     assign do_wr = wr_valid & wr_ready;
     assign do_rd = rd_valid & rd_ready;

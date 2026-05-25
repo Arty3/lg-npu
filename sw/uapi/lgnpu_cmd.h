@@ -79,6 +79,8 @@ struct npu_conv_params
     uint16_t stride_w;
     uint16_t pad_h;
     uint16_t pad_w;
+    uint16_t out_h;
+    uint16_t out_w;
     uint8_t  quant_shift;
     uint8_t  act_mode;
 };
@@ -137,6 +139,8 @@ struct npu_pool_params
     uint16_t stride_w;
     uint16_t pad_h;
     uint16_t pad_w;
+    uint16_t out_h;
+    uint16_t out_w;
     uint8_t  pool_mode;
 };
 

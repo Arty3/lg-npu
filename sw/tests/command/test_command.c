@@ -72,8 +72,8 @@ static void test_conv_field_packing(void)
     ASSERT_EQ(desc.words[10], 3u);
     ASSERT_EQ(desc.words[11], 1u);
     ASSERT_EQ(desc.words[12], 1u);
-    ASSERT_EQ(desc.words[13], 1u);
-    ASSERT_EQ(desc.words[14], 1u);
+    ASSERT_EQ(desc.words[13], 1u | (28u << 16));
+    ASSERT_EQ(desc.words[14], 1u | (28u << 16));
     /* word[15] = (quant_shift & 0x1F) | (act_mode << 5) = 7 | (1 << 5) = 39 */
     ASSERT_EQ(desc.words[15], 7u | (1u << 5));
 
@@ -302,8 +302,8 @@ static void test_pool_field_packing(void)
     ASSERT_EQ(desc.words[10], 2u);
     ASSERT_EQ(desc.words[11], 2u);
     ASSERT_EQ(desc.words[12], 2u);
-    ASSERT_EQ(desc.words[13], 0u);
-    ASSERT_EQ(desc.words[14], 0u);
+    ASSERT_EQ(desc.words[13], 4u << 16);
+    ASSERT_EQ(desc.words[14], 4u << 16);
     ASSERT_EQ(desc.words[15], 1u);  /* AVG = 1 */
 
     TEST_PASS();

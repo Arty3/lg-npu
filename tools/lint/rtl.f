@@ -32,7 +32,9 @@ rtl/common/priority_encoder.sv
 rtl/common/onehot_mux.sv
 
 // --- Platform wrappers ------------------------------------------------------
+rtl/platform/sky130_sram_blackboxes.sv
 rtl/platform/mem_macro_wrap.sv
+rtl/platform/mem_macro_1rw1r_wrap.sv
 rtl/platform/reset_sync.sv
 rtl/platform/clock_gate_wrap.sv
 
@@ -105,3 +107,13 @@ rtl/core/npu_scheduler.sv
 rtl/core/npu_dispatch.sv
 rtl/core/npu_core.sv
 rtl/core/npu_shell.sv
+
+// --- Formal / assertion properties ------------------------------------------
+formal/properties/fifo_props.sv
+formal/properties/queue_props.sv
+formal/properties/irq_props.sv
+formal/properties/status_props.sv
+formal/properties/handshake_props.sv
+formal/properties/dma_props.sv
+formal/properties/mem_req_rsp_props.sv
+formal/properties/bindings.sv

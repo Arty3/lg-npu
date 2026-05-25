@@ -18,9 +18,7 @@ module lnorm_ctrl
     input  logic                rst_n,
 
     // Command interface (from dispatch)
-    /* verilator lint_off UNUSEDSIGNAL */
-    input  conv_cmd_t           cmd,
-    /* verilator lint_on UNUSEDSIGNAL */
+    input  lnorm_cmd_t          cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -147,13 +145,15 @@ module lnorm_ctrl
     /* verilator lint_off UNUSEDSIGNAL */
     logic signed [31:0] diff_w;
     /* verilator lint_on UNUSEDSIGNAL */
-    logic [8:0]         abs_diff_w;
+    logic [31:0]        abs_diff_w;
+    logic [63:0]        abs_diff_sq_w;
     logic [39:0]        wide_scaled_w;
     logic [31:0]        scaled_abs_w;
 
     assign diff_w        = {{24{act_rd_rdata[DATA_W-1]}}, act_rd_rdata} - mean_r;
-    assign abs_diff_w    = diff_w[31] ? 9'(-diff_w[8:0]) : diff_w[8:0];
-    assign wide_scaled_w = {31'b0, abs_diff_w} << norm_shift_r;
+    assign abs_diff_w    = diff_w[31] ? -diff_w : diff_w;
+    assign abs_diff_sq_w = {32'b0, abs_diff_w} * {32'b0, abs_diff_w};
+    assign wide_scaled_w = {8'b0, abs_diff_w} << norm_shift_r;
     assign scaled_abs_w  = (|wide_scaled_w[39:32]) ? 32'hFFFF_FFFF
                                                    : wide_scaled_w[31:0];
 
@@ -239,9 +239,9 @@ module lnorm_ctrl
         end
         else if (state == S_IDLE && cmd_valid)
         begin
-            num_rows_r   <= cmd.in_h;
-            row_len_r    <= cmd.in_w;
-            norm_shift_r <= cmd.quant_shift;
+            num_rows_r   <= cmd.num_rows;
+            row_len_r    <= cmd.row_len;
+            norm_shift_r <= cmd.norm_shift;
         end
     end
 
@@ -257,8 +257,8 @@ module lnorm_ctrl
         else if (state == S_LOAD_CFG)
         begin
             row_r          <= '0;
-            in_row_base_r  <= cmd.act_in_addr;
-            out_row_base_r <= cmd.act_out_addr;
+            in_row_base_r  <= cmd.in_addr;
+            out_row_base_r <= cmd.out_addr;
         end
         else if (state == S_NORM_WR && out_wr_gnt &&
                  idx_r == row_len_r - 1 && row_r < num_rows_r - 1)
@@ -332,8 +332,7 @@ module lnorm_ctrl
             var_sum_r <= '0;
         else if (state == S_VAR_WAIT && act_rd_rvalid)
         begin
-            // |diff| fits in 9 bits, so diff^2 fits in 17 bits unsigned
-            var_sum_r <= var_sum_r + {23'b0, abs_diff_w} * {23'b0, abs_diff_w};
+            var_sum_r <= var_sum_r + abs_diff_sq_w[31:0];
         end
     end
 
@@ -376,7 +375,9 @@ module lnorm_ctrl
                     if (act_rd_rvalid && idx_r == row_len_r - 1)
                     begin
                         logic [31:0] final_var;
-                        final_var = var_sum_r + {23'b0, abs_diff_w} * {23'b0, abs_diff_w};
+                        logic [63:0] final_var_wide;
+                        final_var_wide = {32'b0, var_sum_r} + abs_diff_sq_w;
+                        final_var = |final_var_wide[63:32] ? 32'hFFFF_FFFF : final_var_wide[31:0];
                         div_sign_r  <= 1'b0;
                         div_quot_r  <= final_var;
                         div_rem_r   <= '0;

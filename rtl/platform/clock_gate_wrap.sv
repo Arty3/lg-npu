@@ -10,7 +10,15 @@ module clock_gate_wrap (
     output logic gated_clk
 );
 
-    // Latch-based clock gate (safe for ASIC; benign for simulation)
+`ifdef ASIC_BUILD
+    // Map to a recognized Sky130 integrated clock-gating cell for CTS/power.
+    sky130_fd_sc_hd__dlclkp_1 u_icg (
+        .CLK (clk),
+        .GATE(en),
+        .GCLK(gated_clk)
+    );
+`else
+    // Functional fallback for simulation/lint.
     logic en_latched;
 
     always_latch begin
@@ -19,5 +27,6 @@ module clock_gate_wrap (
     end
 
     assign gated_clk = clk & en_latched;
+`endif
 
 endmodule : clock_gate_wrap

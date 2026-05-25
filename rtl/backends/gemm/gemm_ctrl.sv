@@ -12,7 +12,7 @@ module gemm_ctrl
     input  logic                rst_n,
 
     // Command interface (from dispatch)
-    input  conv_cmd_t           cmd,
+    input  gemm_cmd_t           cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -57,9 +57,7 @@ module gemm_ctrl
     state_e state, state_next;
 
     // Latched command fields
-    /* verilator lint_off UNUSEDSIGNAL */
-    conv_cmd_t cmd_r;
-    /* verilator lint_on UNUSEDSIGNAL */
+    gemm_cmd_t cmd_r;
 
     // Internal index registers
     dim_t m_r, n_r, k_r;
@@ -68,6 +66,7 @@ module gemm_ctrl
     logic inner_last;
     logic outer_last;
     logic advance;
+    logic last_k, last_n;
 
     // State register
     always_ff @(posedge clk or negedge rst_n) begin
@@ -99,11 +98,12 @@ module gemm_ctrl
     end
 
     // Loop counters
-    // Conv cmd fields reused: in_h = M, in_w = N, in_c = K
     assign advance    = (state == COMPUTE) && iter_ready;
-    assign inner_last = (k_r == cmd_r.in_c - 1);
-    assign outer_last = (m_r == cmd_r.in_h - 1) &&
-                        (n_r == cmd_r.in_w - 1);
+    assign last_k     = (k_r == cmd_r.k_dim - 1);
+    assign last_n     = (n_r == cmd_r.n_dim - 1);
+    assign inner_last = last_k;
+    assign outer_last = (m_r == cmd_r.m_dim - 1) &&
+                        last_n;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -116,16 +116,16 @@ module gemm_ctrl
             k_r <= '0;
         end else if (advance) begin
             // Inner loop: k
-            if (k_r < cmd_r.in_c - 1) begin
+            if (!last_k) begin
                 k_r <= k_r + 1;
             end else begin
                 k_r <= '0;
                 // Outer loop: n -> m
-                if (n_r < cmd_r.in_w - 1) begin
+                if (!last_n) begin
                     n_r <= n_r + 1;
                 end else begin
                     n_r <= '0;
-                    if (m_r < cmd_r.in_h - 1)
+                    if (m_r < cmd_r.m_dim - 1)
                         m_r <= m_r + 1;
                 end
             end
@@ -145,14 +145,14 @@ module gemm_ctrl
     assign n     = n_r;
     assign k_idx = k_r;
 
-    // Parameters (mapped from conv_cmd_t fields)
-    assign a_base      = cmd_r.act_in_addr;
-    assign b_base      = cmd_r.weight_addr;
-    assign c_base      = cmd_r.act_out_addr;
+    // Parameters
+    assign a_base      = cmd_r.a_addr;
+    assign b_base      = cmd_r.b_addr;
+    assign c_base      = cmd_r.c_addr;
     assign bias_base   = cmd_r.bias_addr;
-    assign m_dim       = cmd_r.in_h;
-    assign n_dim       = cmd_r.in_w;
-    assign k_dim       = cmd_r.in_c;
+    assign m_dim       = cmd_r.m_dim;
+    assign n_dim       = cmd_r.n_dim;
+    assign k_dim       = cmd_r.k_dim;
     assign quant_shift = cmd_r.quant_shift;
     assign act_mode    = cmd_r.act_mode;
 

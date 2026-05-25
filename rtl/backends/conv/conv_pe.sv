@@ -20,12 +20,7 @@ module conv_pe
     input  logic                      valid_in,
     output logic                      ready_out,
     output logic                      valid_out,
-    input  logic                      ready_in,
-
-    // Combinational signed-overflow flag on the internal add
-    // (acc_in + sign_extend(act_in * wt_in)). Valid only on cycles where
-    // the caller intends to accept this product (i.e. valid_in & ready_out).
-    output logic                      acc_overflow
+    input  logic                      ready_in
 );
 
     logic signed [2*DATA_W-1:0]       mul;
@@ -41,11 +36,6 @@ module conv_pe
     assign ready_out = ~valid_r | ready_in;
     assign acc_out   = result_r;
     assign valid_out = valid_r;
-
-    // Signed addition overflows iff both addends share a sign and the sum
-    // takes the opposite sign. The sign-extended product's sign is mul[15].
-    assign acc_overflow = (acc_in[ACC_W-1]   == mul[2*DATA_W-1]) &&
-                          (product[ACC_W-1]  != acc_in[ACC_W-1]);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

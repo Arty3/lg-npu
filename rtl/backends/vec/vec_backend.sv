@@ -12,7 +12,7 @@ module vec_backend
     input  logic                rst_n,
 
     // Command from dispatch
-    input  conv_cmd_t           cmd,
+    input  vec_cmd_t            cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 

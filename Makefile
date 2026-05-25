@@ -122,7 +122,6 @@ sim-full: sim-smoke sim-full-tests ## Run complete regression (smoke + full)
 .PHONY: vectors
 vectors: ## Generate test vectors from Python reference models
 	$(PYTHON) model/vectors/gen_conv_vectors.py  --out-dir $(VEC_DIR)
-	$(PYTHON) model/vectors/gen_quant_vectors.py --out-dir $(VEC_DIR)
 
 .PHONY: format
 format: ## Run code formatter on RTL and scripts
@@ -174,6 +173,10 @@ synth-yosys: ## Run Yosys generic synthesis to catch structural issues
 	yosys -l $(SYNTH_BUILD)/synth.log -p 'read_verilog $(SYNTH_BUILD)/design.v; hierarchy -top $(TOP) -check; proc; opt; check -assert; synth -top $(TOP); stat'
 	@echo ""
 	@echo "=== synth-yosys: log at $(SYNTH_BUILD)/synth.log ==="
+
+.PHONY: asic-sky130-setup
+asic-sky130-setup: ## Validate Sky130 PDK environment variables
+	bash asic/scripts/setup_sky130_env.sh
 
 # SW test targets
 SW_TEST_FLAGS := $(SW_STD) $(SW_WARN) -Ofast -Wno-unused-function

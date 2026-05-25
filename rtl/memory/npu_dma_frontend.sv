@@ -101,11 +101,17 @@ module npu_dma_frontend
     assign dma_busy = rd_busy | wr_busy;
     assign dma_done = rd_done | wr_done;
 
+    // Current frontend contract is single-direction DMA at a time.
+    always_ff @(posedge clk) begin
+        if (rst_n)
+            assert (!(rd_busy && wr_busy));
+    end
+
     // External memory port mux
     assign ext_mem_addr  = rd_busy ? rd_ext_addr  : wr_ext_addr;
-    assign ext_mem_wdata = wr_ext_wdata;
-    assign ext_mem_wr    = wr_ext_wr;
-    assign ext_mem_req   = rd_ext_req | wr_ext_req;
+    assign ext_mem_wdata = wr_busy ? wr_ext_wdata : '0;
+    assign ext_mem_wr    = wr_busy ? wr_ext_wr    : 1'b0;
+    assign ext_mem_req   = rd_busy ? rd_ext_req   : wr_ext_req;
 
     // Local buffer port mux
     assign buf_addr  = rd_busy ? rd_buf_addr  : wr_buf_addr;

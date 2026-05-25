@@ -14,6 +14,8 @@ module status_props (
     input logic queue_full
 );
 
+`ifdef FORMAL
+
     // idle and busy are mutually exclusive
     a_idle_busy_mutex: assert property (
         @(posedge clk) disable iff (!rst_n)
@@ -49,5 +51,14 @@ module status_props (
         @(posedge clk)
         !rst_n |=> idle
     );
+
+`elsif SIMULATION
+
+    a_idle_busy_mutex: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        !(idle && busy)
+    );
+
+`endif
 
 endmodule : status_props

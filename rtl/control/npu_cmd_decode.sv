@@ -55,8 +55,8 @@ module npu_cmd_decode
     //   [10] filt_s
     //   [11] stride_h
     //   [12] stride_w
-    //   [13] pad_h
-    //   [14] pad_w
+    //   [13] pad_h (low 16), out_h (high 16)
+    //   [14] pad_w (low 16), out_w (high 16)
     //   [15] quant_shift (lower 5 bits)
 
     typedef enum logic [1:0]
@@ -113,6 +113,8 @@ module npu_cmd_decode
             cmd_r.stride_w     <= desc_regs[12][DIM_W-1:0];
             cmd_r.pad_h        <= desc_regs[13][DIM_W-1:0];
             cmd_r.pad_w        <= desc_regs[14][DIM_W-1:0];
+            cmd_r.out_h        <= desc_regs[13][31:16];
+            cmd_r.out_w        <= desc_regs[14][31:16];
             cmd_r.quant_shift  <= desc_regs[15][4:0];
             cmd_r.act_mode     <= act_mode_e'(desc_regs[15][6:5]);
         end

@@ -28,49 +28,44 @@ module npu_weight_buffer
     output logic                        be_rvalid
 );
 
-    // Simple arbitration: backend has priority, host waits
-    logic                       sel_host;
-    logic [SRAM_ADDR_W-1:0]     mux_addr;
-    logic [DATA_W-1:0]          mux_wdata;
-    logic                       mux_we, mux_req;
-    logic [DATA_W-1:0]          mem_rdata;
-    logic                       mem_rvalid;
-    logic                       mem_gnt;
+    logic [DATA_W-1:0] host_rdata_i;
+    logic [DATA_W-1:0] be_rdata_i;
 
-    assign sel_host  = ~be_req;
-    assign mux_addr  = sel_host ? host_addr  : be_addr;
-    assign mux_wdata = host_wdata;
-    assign mux_we    = sel_host & host_we;
-    assign mux_req   = sel_host ? host_req : be_req;
+    logic host_rd_r;
+    logic be_rd_r;
 
-    assign host_gnt  = sel_host & mem_gnt;
-    assign be_gnt    = ~sel_host & mem_gnt;
-
-    npu_local_mem_wrap #(
+    // 1RW1R: host/DMA uses RW port, backend uses dedicated read port.
+    mem_macro_1rw1r_wrap #(
         .DEPTH  (SRAM_DEPTH),
         .DATA_W (DATA_W)
     ) u_sram (
-        .clk    (clk),
-        .rst_n  (rst_n),
-        .addr   (mux_addr),
-        .wdata  (mux_wdata),
-        .we     (mux_we),
-        .req    (mux_req),
-        .gnt    (mem_gnt),
-        .rdata  (mem_rdata),
-        .rvalid (mem_rvalid)
+        .clk     (clk),
+        .a_addr  (host_addr),
+        .a_wdata (host_wdata),
+        .a_we    (host_we),
+        .a_en    (host_req),
+        .a_rdata (host_rdata_i),
+        .b_addr  (be_addr),
+        .b_en    (be_req),
+        .b_rdata (be_rdata_i)
     );
 
-    // Route read data back to the requester that was active
-    logic host_was_sel;
+    assign host_gnt = host_req;
+    assign be_gnt   = be_req;
+
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) host_was_sel <= 1'b0;
-        else        host_was_sel <= sel_host & mux_req;
+        if (!rst_n) begin
+            host_rd_r <= 1'b0;
+            be_rd_r   <= 1'b0;
+        end else begin
+            host_rd_r <= host_req & ~host_we;
+            be_rd_r   <= be_req;
+        end
     end
 
-    assign host_rdata  = mem_rdata;
-    assign host_rvalid = mem_rvalid & host_was_sel;
-    assign be_rdata    = mem_rdata;
-    assign be_rvalid   = mem_rvalid & ~host_was_sel;
+    assign host_rdata  = host_rdata_i;
+    assign host_rvalid = host_rd_r;
+    assign be_rdata    = be_rdata_i;
+    assign be_rvalid   = be_rd_r;
 
 endmodule : npu_weight_buffer

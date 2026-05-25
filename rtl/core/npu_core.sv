@@ -36,34 +36,34 @@ module npu_core
 );
 
     // Scheduler -> Dispatch wires
-    conv_cmd_t disp_cmd;
-    logic      disp_valid, disp_ready;
+    conv_cmd_t    disp_cmd;
+    logic         disp_valid, disp_ready;
 
     // Dispatch -> GEMM backend
-    conv_cmd_t gemm_be_cmd;
-    logic      gemm_be_cmd_valid, gemm_be_cmd_ready;
+    gemm_cmd_t    gemm_be_cmd;
+    logic         gemm_be_cmd_valid, gemm_be_cmd_ready;
 
     // Dispatch -> Softmax backend
-    conv_cmd_t smax_be_cmd;
-    logic      smax_be_cmd_valid, smax_be_cmd_ready;
+    softmax_cmd_t smax_be_cmd;
+    logic         smax_be_cmd_valid, smax_be_cmd_ready;
 
     // Dispatch -> Conv backend
-    conv_cmd_t conv_be_cmd;
-    logic      conv_be_cmd_valid, conv_be_cmd_ready;
+    conv_cmd_t    conv_be_cmd;
+    logic         conv_be_cmd_valid, conv_be_cmd_ready;
 
     // Dispatch -> Vec backend
-    conv_cmd_t vec_be_cmd;
-    logic      vec_be_cmd_valid, vec_be_cmd_ready;
+    vec_cmd_t     vec_be_cmd;
+    logic         vec_be_cmd_valid, vec_be_cmd_ready;
 
     // Dispatch -> LayerNorm backend
-    conv_cmd_t lnorm_be_cmd;
-    logic      lnorm_be_cmd_valid, lnorm_be_cmd_ready;
+    lnorm_cmd_t   lnorm_be_cmd;
+    logic         lnorm_be_cmd_valid, lnorm_be_cmd_ready;
 
     // Dispatch -> Pool backend
-    conv_cmd_t pool_be_cmd;
-    logic      pool_be_cmd_valid, pool_be_cmd_ready;
+    pool_cmd_t    pool_be_cmd;
+    logic         pool_be_cmd_valid, pool_be_cmd_ready;
 
-    logic be_done, be_busy;
+    logic         be_done, be_busy;
 
     npu_scheduler u_sched (
         .clk            (clk),
@@ -130,23 +130,23 @@ module npu_core
         .cmd_ready      (gemm_be_cmd_ready),
         .act_rd_addr    (gemm_act_rd_addr),
         .act_rd_req     (gemm_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b001) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b001) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b001) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (gemm_wt_rd_addr),
         .wt_rd_req      (gemm_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b001) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b001) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b001) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (gemm_out_wr_addr),
         .out_wr_data    (gemm_out_wr_data),
         .out_wr_req     (gemm_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b001) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (gemm_bias_addr),
         .bias_rd_req    (gemm_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b001) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b001) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b001) ? be_bias_rvalid : 1'b0),
         .done           (gemm_done),
         .busy           (gemm_busy)
     );
@@ -167,23 +167,23 @@ module npu_core
         .cmd_ready      (smax_be_cmd_ready),
         .act_rd_addr    (smax_act_rd_addr),
         .act_rd_req     (smax_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b010) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b010) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b010) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (smax_wt_rd_addr),
         .wt_rd_req      (smax_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b010) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b010) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b010) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (smax_out_wr_addr),
         .out_wr_data    (smax_out_wr_data),
         .out_wr_req     (smax_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b010) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (smax_bias_addr),
         .bias_rd_req    (smax_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b010) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b010) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b010) ? be_bias_rvalid : 1'b0),
         .done           (smax_done),
         .busy           (smax_busy)
     );
@@ -204,23 +204,23 @@ module npu_core
         .cmd_ready      (conv_be_cmd_ready),
         .act_rd_addr    (conv_act_rd_addr),
         .act_rd_req     (conv_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b000) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b000) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b000) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (conv_wt_rd_addr),
         .wt_rd_req      (conv_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b000) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b000) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b000) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (conv_out_wr_addr),
         .out_wr_data    (conv_out_wr_data),
         .out_wr_req     (conv_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b000) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (conv_bias_addr),
         .bias_rd_req    (conv_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b000) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b000) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b000) ? be_bias_rvalid : 1'b0),
         .done           (conv_done),
         .busy           (conv_busy)
     );
@@ -241,23 +241,23 @@ module npu_core
         .cmd_ready      (vec_be_cmd_ready),
         .act_rd_addr    (vec_act_rd_addr),
         .act_rd_req     (vec_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b011) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b011) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b011) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (vec_wt_rd_addr),
         .wt_rd_req      (vec_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b011) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b011) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b011) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (vec_out_wr_addr),
         .out_wr_data    (vec_out_wr_data),
         .out_wr_req     (vec_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b011) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (vec_bias_addr),
         .bias_rd_req    (vec_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b011) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b011) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b011) ? be_bias_rvalid : 1'b0),
         .done           (vec_done),
         .busy           (vec_busy)
     );
@@ -278,23 +278,23 @@ module npu_core
         .cmd_ready      (lnorm_be_cmd_ready),
         .act_rd_addr    (lnorm_act_rd_addr),
         .act_rd_req     (lnorm_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b100) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b100) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b100) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (lnorm_wt_rd_addr),
         .wt_rd_req      (lnorm_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b100) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b100) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b100) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (lnorm_out_wr_addr),
         .out_wr_data    (lnorm_out_wr_data),
         .out_wr_req     (lnorm_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b100) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (lnorm_bias_addr),
         .bias_rd_req    (lnorm_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b100) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b100) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b100) ? be_bias_rvalid : 1'b0),
         .done           (lnorm_done),
         .busy           (lnorm_busy)
     );
@@ -315,23 +315,23 @@ module npu_core
         .cmd_ready      (pool_be_cmd_ready),
         .act_rd_addr    (pool_act_rd_addr),
         .act_rd_req     (pool_act_rd_req),
-        .act_rd_gnt     (be_act_rd_gnt),
-        .act_rd_rdata   (be_act_rd_rdata),
-        .act_rd_rvalid  (be_act_rd_rvalid),
+        .act_rd_gnt     ((be_sel_r == 3'b101) ? be_act_rd_gnt    : 1'b0),
+        .act_rd_rdata   ((be_sel_r == 3'b101) ? be_act_rd_rdata  : '0),
+        .act_rd_rvalid  ((be_sel_r == 3'b101) ? be_act_rd_rvalid : 1'b0),
         .wt_rd_addr     (pool_wt_rd_addr),
         .wt_rd_req      (pool_wt_rd_req),
-        .wt_rd_gnt      (be_wt_rd_gnt),
-        .wt_rd_rdata    (be_wt_rd_rdata),
-        .wt_rd_rvalid   (be_wt_rd_rvalid),
+        .wt_rd_gnt      ((be_sel_r == 3'b101) ? be_wt_rd_gnt    : 1'b0),
+        .wt_rd_rdata    ((be_sel_r == 3'b101) ? be_wt_rd_rdata  : '0),
+        .wt_rd_rvalid   ((be_sel_r == 3'b101) ? be_wt_rd_rvalid : 1'b0),
         .out_wr_addr    (pool_out_wr_addr),
         .out_wr_data    (pool_out_wr_data),
         .out_wr_req     (pool_out_wr_req),
-        .out_wr_gnt     (be_out_wr_gnt),
+        .out_wr_gnt     ((be_sel_r == 3'b101) ? be_out_wr_gnt : 1'b0),
         .bias_rd_addr   (pool_bias_addr),
         .bias_rd_req    (pool_bias_req),
-        .bias_rd_gnt    (be_bias_gnt),
-        .bias_rd_rdata  (be_bias_rdata),
-        .bias_rd_rvalid (be_bias_rvalid),
+        .bias_rd_gnt    ((be_sel_r == 3'b101) ? be_bias_gnt    : 1'b0),
+        .bias_rd_rdata  ((be_sel_r == 3'b101) ? be_bias_rdata  : '0),
+        .bias_rd_rvalid ((be_sel_r == 3'b101) ? be_bias_rvalid : 1'b0),
         .done           (pool_done),
         .busy           (pool_busy)
     );
@@ -472,8 +472,28 @@ module npu_core
     );
 
     // Status
+    logic has_outstanding_request;
+    assign has_outstanding_request = be_act_rd_req;
+
     assign backend_busy   = be_busy;
     assign backend_active = be_busy & ~backend_stall;
-    assign backend_stall  = be_busy & ~be_act_rd_gnt;
+    assign backend_stall  = be_busy & has_outstanding_request & ~be_act_rd_gnt;
+
+`ifdef SIMULATION
+    logic act_rd_outstanding_r;
+    always_ff @(posedge clk or negedge rst_n)
+    begin
+        if (!rst_n)
+            act_rd_outstanding_r <= 1'b0;
+        else begin
+            if (be_act_rd_req && be_act_rd_gnt)
+                act_rd_outstanding_r <= 1'b1;
+            if (be_act_rd_rvalid)
+                act_rd_outstanding_r <= 1'b0;
+
+            assert (!(be_act_rd_rvalid && !act_rd_outstanding_r));
+        end
+    end
+`endif
 
 endmodule : npu_core

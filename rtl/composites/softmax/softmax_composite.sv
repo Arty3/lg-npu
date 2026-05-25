@@ -12,7 +12,7 @@ module softmax_composite
     input  logic                rst_n,
 
     // Command from dispatch
-    input  conv_cmd_t           cmd,
+    input  softmax_cmd_t        cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 

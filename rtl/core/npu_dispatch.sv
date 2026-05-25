@@ -8,46 +8,46 @@ module npu_dispatch
     import npu_cmd_pkg::*;
 (
     // From scheduler
-    input  conv_cmd_t sched_cmd,
-    input  logic      sched_valid,
-    output logic      sched_ready,
+    input  conv_cmd_t    sched_cmd,
+    input  logic         sched_valid,
+    output logic         sched_ready,
 
     // To GEMM backend (checked first)
-    output conv_cmd_t gemm_cmd,
-    output logic      gemm_cmd_valid,
-    input  logic      gemm_cmd_ready,
+    output gemm_cmd_t    gemm_cmd,
+    output logic         gemm_cmd_valid,
+    input  logic         gemm_cmd_ready,
 
     // To softmax backend
-    output conv_cmd_t softmax_cmd,
-    output logic      softmax_cmd_valid,
-    input  logic      softmax_cmd_ready,
+    output softmax_cmd_t softmax_cmd,
+    output logic         softmax_cmd_valid,
+    input  logic         softmax_cmd_ready,
 
     // To vec backend
-    output conv_cmd_t vec_cmd,
-    output logic      vec_cmd_valid,
-    input  logic      vec_cmd_ready,
+    output vec_cmd_t     vec_cmd,
+    output logic         vec_cmd_valid,
+    input  logic         vec_cmd_ready,
 
     // To lnorm backend
-    output conv_cmd_t lnorm_cmd,
-    output logic      lnorm_cmd_valid,
-    input  logic      lnorm_cmd_ready,
+    output lnorm_cmd_t   lnorm_cmd,
+    output logic         lnorm_cmd_valid,
+    input  logic         lnorm_cmd_ready,
 
     // To pool backend
-    output conv_cmd_t pool_cmd,
-    output logic      pool_cmd_valid,
-    input  logic      pool_cmd_ready,
+    output pool_cmd_t    pool_cmd,
+    output logic         pool_cmd_valid,
+    input  logic         pool_cmd_ready,
 
     // To conv backend (default)
-    output conv_cmd_t conv_cmd,
-    output logic      conv_cmd_valid,
-    input  logic      conv_cmd_ready
+    output conv_cmd_t    conv_cmd,
+    output logic         conv_cmd_valid,
+    input  logic         conv_cmd_ready
 );
 
-    assign gemm_cmd    = sched_cmd;
-    assign softmax_cmd = sched_cmd;
-    assign vec_cmd     = sched_cmd;
-    assign lnorm_cmd   = sched_cmd;
-    assign pool_cmd    = sched_cmd;
+    assign gemm_cmd    = conv_to_gemm_cmd(sched_cmd);
+    assign softmax_cmd = conv_to_softmax_cmd(sched_cmd);
+    assign vec_cmd     = conv_to_vec_cmd(sched_cmd);
+    assign lnorm_cmd   = conv_to_lnorm_cmd(sched_cmd);
+    assign pool_cmd    = conv_to_pool_cmd(sched_cmd);
     assign conv_cmd    = sched_cmd;
 
     always_comb begin

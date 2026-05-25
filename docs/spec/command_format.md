@@ -32,6 +32,9 @@ Dispatch priority: GEMM > Softmax > Vec > LayerNorm > Pool > Convolution.
 All opcodes share the same 16-word descriptor structure.
 Fields that are unused by a given opcode should be written as zero.
 
+The RTL carries this descriptor as a single shared command type. Field names
+in opcode-specific tables below are aliases onto the same word positions.
+
 All tensor data referenced by a command must already be in NHWC
 (channel-last) order in device SRAM.  The runtime converts external
 layouts to NHWC before loading data.  See [tensor_layouts.md](tensor_layouts.md)
@@ -54,8 +57,10 @@ for the full layout policy and conversion rules.
 | 10 | `filt_s` | 16 bits | Filter width |
 | 11 | `stride_h` | 16 bits | Vertical stride |
 | 12 | `stride_w` | 16 bits | Horizontal stride |
-| 13 | `pad_h` | 16 bits | Vertical zero-padding (each side) |
-| 14 | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
+| 13 [15:0] | `pad_h` | 16 bits | Vertical zero-padding (each side) |
+| 13 [31:16] | `out_h` | 16 bits | Host-precomputed output height |
+| 14 [15:0] | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
+| 14 [31:16] | `out_w` | 16 bits | Host-precomputed output width |
 | 15 | `quant_shift` | 5 bits (bits [4:0]) | Right-shift for INT32->INT8 quantisation |
 | 15 | `act_mode` | 2 bits (bits [6:5]) | Activation function: 0 = None, 1 = ReLU, 2 = Leaky ReLU |
 
@@ -177,11 +182,14 @@ Unused fields (words 3-4, 8) must be zero.
 | 10 | `pool_s` | 16 bits | Pooling window width |
 | 11 | `stride_h` | 16 bits | Vertical stride |
 | 12 | `stride_w` | 16 bits | Horizontal stride |
-| 13 | `pad_h` | 16 bits | Vertical zero-padding (each side) |
-| 14 | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
+| 13 [15:0] | `pad_h` | 16 bits | Vertical zero-padding (each side) |
+| 13 [31:16] | `out_h` | 16 bits | Host-precomputed output height |
+| 14 [15:0] | `pad_w` | 16 bits | Horizontal zero-padding (each side) |
+| 14 [31:16] | `out_w` | 16 bits | Host-precomputed output width |
 | 15 | `pool_mode` | 1 bit (bit [0]) | 0 = MAX pool, 1 = AVG pool |
 
-Output dimensions are the same as convolution:
+Host software computes output dimensions and writes them in words 13/14
+upper halves:
 
 $$OH = \frac{H + 2 \cdot \text{pad\_h} - \text{pool\_r}}{\text{stride\_h}} + 1$$
 $$OW = \frac{W + 2 \cdot \text{pad\_w} - \text{pool\_s}}{\text{stride\_w}} + 1$$

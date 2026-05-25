@@ -14,9 +14,7 @@ module vec_ctrl
     input  logic                rst_n,
 
     // Command interface (from dispatch)
-    /* verilator lint_off UNUSEDSIGNAL */
-    input  conv_cmd_t           cmd,
-    /* verilator lint_on UNUSEDSIGNAL */
+    input  vec_cmd_t            cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -46,7 +44,7 @@ module vec_ctrl
 );
 
     // Sub-operation codes (encoded in in_w field)
-    localparam dim_t VEC_ADD = '0;
+    localparam logic VEC_ADD = 1'b0;
 
     typedef enum logic [2:0]
     {
@@ -63,12 +61,15 @@ module vec_ctrl
     // Latched command fields
     logic [ADDR_W-1:0] a_base_r, b_base_r, out_base_r;
     dim_t              length_r;
-    dim_t              vec_op_r;
+    logic              vec_op_r;
     logic [4:0]        qshift_r;
     act_mode_e         act_mode_r;
 
     // Element index
     dim_t idx_r;
+
+    // Incremental current addresses for source/output vectors
+    logic [ADDR_W-1:0] a_addr_r, b_addr_r, out_addr_r;
 
     // Read tracking
     logic              a_gnt_r, b_gnt_r;
@@ -118,11 +119,11 @@ module vec_ctrl
             qshift_r   <= '0;
             act_mode_r <= ACT_NONE;
         end else if (state == S_IDLE && cmd_valid) begin
-            a_base_r   <= cmd.act_in_addr;
-            b_base_r   <= cmd.weight_addr;
-            out_base_r <= cmd.act_out_addr;
-            length_r   <= cmd.in_h;
-            vec_op_r   <= cmd.in_w;
+            a_base_r   <= cmd.a_addr;
+            b_base_r   <= cmd.b_addr;
+            out_base_r <= cmd.out_addr;
+            length_r   <= cmd.length;
+            vec_op_r   <= cmd.vec_op;
             qshift_r   <= cmd.quant_shift;
             act_mode_r <= cmd.act_mode;
         end
@@ -137,6 +138,29 @@ module vec_ctrl
             idx_r <= '0;
         else if (state == S_WRITE && out_wr_gnt)
             idx_r <= idx_r + 1;
+    end
+
+    // Address trackers
+    always_ff @(posedge clk or negedge rst_n)
+    begin
+        if (!rst_n)
+        begin
+            a_addr_r   <= '0;
+            b_addr_r   <= '0;
+            out_addr_r <= '0;
+        end
+        else if (state == S_LOAD_CFG)
+        begin
+            a_addr_r   <= a_base_r;
+            b_addr_r   <= b_base_r;
+            out_addr_r <= out_base_r;
+        end
+        else if (state == S_WRITE && out_wr_gnt)
+        begin
+            a_addr_r   <= a_addr_r + ADDR_W'(1);
+            b_addr_r   <= b_addr_r + ADDR_W'(1);
+            out_addr_r <= out_addr_r + ADDR_W'(1);
+        end
     end
 
     // Grant tracking flags
@@ -216,15 +240,15 @@ module vec_ctrl
     end
 
     // Memory interface - act read (source A)
-    assign act_rd_addr = a_base_r + ADDR_W'(idx_r);
+    assign act_rd_addr = a_addr_r;
     assign act_rd_req  = (state == S_READ) && !a_gnt_r;
 
     // Memory interface - wt read (source B)
-    assign wt_rd_addr = b_base_r + ADDR_W'(idx_r);
+    assign wt_rd_addr = b_addr_r;
     assign wt_rd_req  = (state == S_READ) && !b_gnt_r;
 
     // Memory interface - output write
-    assign out_wr_addr = out_base_r + ADDR_W'(idx_r);
+    assign out_wr_addr = out_addr_r;
     assign out_wr_data = result;
     assign out_wr_req  = (state == S_WRITE);
 

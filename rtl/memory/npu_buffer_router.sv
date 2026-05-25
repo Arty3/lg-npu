@@ -81,6 +81,13 @@ module npu_buffer_router
                                            : be_wt_addr[SRAM_ADDR_W-1:0];
     assign wt_be_req      = be_wt_req | be_bias_req;
 
+`ifdef SIMULATION
+    always_ff @(posedge clk) begin
+        if (rst_n)
+            assert (!(be_wt_req && be_bias_req));
+    end
+`endif
+
     // Weight buffer instance
     logic                   wt_host_gnt, wt_host_rvalid;
     logic [DATA_W-1:0]      wt_host_rdata;

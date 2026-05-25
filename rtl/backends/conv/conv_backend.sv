@@ -104,8 +104,15 @@ module conv_backend
     // conv_addr_gen
     logic [ADDR_W-1:0] act_addr, wt_addr;
     logic zero_pad;
+    logic addr_gen_ready, addr_gen_valid;
 
     conv_addr_gen u_addr_gen (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .in_valid (iter_valid),
+        .in_ready (addr_gen_ready),
+        .out_valid(addr_gen_valid),
+        .out_ready(load_req_ready),
         .act_base (act_base),
         .wt_base  (wt_base),
         .in_h     (in_h),
@@ -131,6 +138,7 @@ module conv_backend
     // conv_loader
     logic signed [DATA_W-1:0] load_act, load_wt;
     logic load_pair_valid, load_pair_ready;
+    logic load_req_ready;
 
     conv_loader u_loader (
         .clk            (clk),
@@ -138,8 +146,8 @@ module conv_backend
         .act_addr       (act_addr),
         .wt_addr        (wt_addr),
         .zero_pad       (zero_pad),
-        .load_valid     (iter_valid),
-        .load_ready     (iter_ready),
+        .load_valid     (addr_gen_valid),
+        .load_ready     (load_req_ready),
         .act_mem_addr   (act_rd_addr),
         .act_mem_req    (act_rd_req),
         .act_mem_gnt    (act_rd_gnt),
@@ -155,6 +163,8 @@ module conv_backend
         .pair_valid     (load_pair_valid),
         .pair_ready     (load_pair_ready)
     );
+
+    assign iter_ready = addr_gen_ready;
 
     // conv_accum + conv_array
     logic signed [ACC_W-1:0] acc_feedback, acc_out_val, pe_acc_out;
@@ -296,8 +306,8 @@ module conv_backend
 
     /* verilator lint_off UNUSEDSIGNAL */
     logic wr_mem_wr;
-    /* verilator lint_on UNUSEDSIGNAL */
     logic wr_done;
+    /* verilator lint_on UNUSEDSIGNAL */
 
     conv_writer u_writer (
         .clk        (clk),
@@ -318,7 +328,7 @@ module conv_backend
     // Gate done/busy so the backend waits for the write pipeline to drain
     logic  pipe_empty;
     assign pipe_empty = ~pp_trigger_r & ~pp_out_valid & ~wr_addr_valid
-                      &  pp_out_ready & ~wr_done;
+                      &  pp_out_ready;
 
     // ctrl_done is a 1-cycle pulse; latch it until the pipeline empties
     logic ctrl_finished;

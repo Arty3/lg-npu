@@ -24,6 +24,8 @@ module fifo_props #(
     logic [PTR_W:0] occupancy;
     assign occupancy = wr_ptr - rd_ptr;
 
+`ifdef FORMAL
+
     // Occupancy bounded
     a_occ_bounded: assert property (
         @(posedge clk) disable iff (!rst_n)
@@ -68,5 +70,14 @@ module fifo_props #(
         @(posedge clk)
         !rst_n |=> (wr_ptr == '0) && (rd_ptr == '0)
     );
+
+`elsif SIMULATION
+
+    a_occ_bounded: assert property (
+        @(posedge clk) disable iff (!rst_n)
+        occupancy <= DEPTH
+    );
+
+`endif
 
 endmodule : fifo_props

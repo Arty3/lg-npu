@@ -34,53 +34,56 @@ module npu_act_buffer
     output logic                        be_wr_gnt
 );
 
-    // Priority: backend write > backend read > host
-    logic                      sel_be_wr, sel_be_rd, sel_host;
-    logic [SRAM_ADDR_W:0]      mux_addr;
-    logic [DATA_W-1:0]         mux_wdata;
-    logic                      mux_we, mux_req;
-    logic [DATA_W-1:0]         mem_rdata;
-    logic                      mem_rvalid, mem_gnt;
+    // 1RW1R organization:
+    //   Port A (RW): backend write has priority, else host/DMA RW.
+    //   Port B (R):  dedicated backend read path.
+    logic [SRAM_ADDR_W:0] a_addr;
+    logic [DATA_W-1:0]    a_wdata;
+    logic                 a_we, a_en;
+    logic [DATA_W-1:0]    a_rdata;
 
-    assign sel_be_wr = be_wr_req;
-    assign sel_be_rd = ~be_wr_req & be_rd_req;
-    assign sel_host  = ~be_wr_req & ~be_rd_req;
+    logic [DATA_W-1:0]    b_rdata;
 
-    assign mux_addr  = sel_be_wr ? be_wr_addr :
-                       sel_be_rd ? be_rd_addr : host_addr;
-    assign mux_wdata = sel_be_wr ? be_wr_data : host_wdata;
-    assign mux_we    = sel_be_wr ? 1'b1       : (sel_host & host_we);
-    assign mux_req   = be_wr_req | be_rd_req  | host_req;
+    logic host_rd_accept_r;
+    logic be_rd_accept_r;
 
-    assign be_wr_gnt = sel_be_wr & mem_gnt;
-    assign be_rd_gnt = sel_be_rd & mem_gnt;
-    assign host_gnt  = sel_host  & mem_gnt;
+    assign a_addr  = be_wr_req ? be_wr_addr : host_addr;
+    assign a_wdata = be_wr_req ? be_wr_data : host_wdata;
+    assign a_we    = be_wr_req ? 1'b1       : (host_req & host_we & ~be_wr_req);
+    assign a_en    = be_wr_req | host_req;
 
-    npu_local_mem_wrap #(
+    mem_macro_1rw1r_wrap #(
         .DEPTH  (SRAM_DEPTH * 2),  // double-size for in + out
         .DATA_W (DATA_W)
     ) u_sram (
-        .clk    (clk),
-        .rst_n  (rst_n),
-        .addr   (mux_addr),
-        .wdata  (mux_wdata),
-        .we     (mux_we),
-        .req    (mux_req),
-        .gnt    (mem_gnt),
-        .rdata  (mem_rdata),
-        .rvalid (mem_rvalid)
+        .clk     (clk),
+        .a_addr  (a_addr),
+        .a_wdata (a_wdata),
+        .a_we    (a_we),
+        .a_en    (a_en),
+        .a_rdata (a_rdata),
+        .b_addr  (be_rd_addr),
+        .b_en    (be_rd_req),
+        .b_rdata (b_rdata)
     );
 
-    // Track who was reading
-    logic [1:0] read_sel_r;  // 0=host, 1=be_rd
+    assign be_wr_gnt = be_wr_req;
+    assign be_rd_gnt = be_rd_req;
+    assign host_gnt  = host_req & ~be_wr_req;
+
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) read_sel_r <= '0;
-        else        read_sel_r <= {sel_be_rd & mux_req, sel_host & mux_req & ~host_we};
+        if (!rst_n) begin
+            host_rd_accept_r <= 1'b0;
+            be_rd_accept_r   <= 1'b0;
+        end else begin
+            host_rd_accept_r <= host_req & ~host_we & ~be_wr_req;
+            be_rd_accept_r   <= be_rd_req;
+        end
     end
 
-    assign host_rdata   = mem_rdata;
-    assign host_rvalid  = mem_rvalid & read_sel_r[0];
-    assign be_rd_rdata  = mem_rdata;
-    assign be_rd_rvalid = mem_rvalid & read_sel_r[1];
+    assign host_rdata   = a_rdata;
+    assign host_rvalid  = host_rd_accept_r;
+    assign be_rd_rdata  = b_rdata;
+    assign be_rd_rvalid = be_rd_accept_r;
 
 endmodule : npu_act_buffer

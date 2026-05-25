@@ -13,7 +13,7 @@ module gemm_backend
     input  logic                rst_n,
 
     // Command from dispatch
-    input  conv_cmd_t           cmd,
+    input  gemm_cmd_t           cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -91,8 +91,15 @@ module gemm_backend
 
     // gemm_addr_gen
     logic [ADDR_W-1:0] a_addr, b_addr;
+    logic addr_gen_ready, addr_gen_valid;
 
     gemm_addr_gen u_addr_gen (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .in_valid (iter_valid),
+        .in_ready (addr_gen_ready),
+        .out_valid(addr_gen_valid),
+        .out_ready(load_req_ready),
         .a_base (a_base),
         .b_base (b_base),
         .n_dim  (n_dim),
@@ -107,6 +114,7 @@ module gemm_backend
     // conv_loader (reused -- zero_pad tied to 0 for GEMM)
     logic signed [DATA_W-1:0] load_a, load_b;
     logic load_pair_valid, load_pair_ready;
+    logic load_req_ready;
 
     conv_loader u_loader (
         .clk            (clk),
@@ -114,8 +122,8 @@ module gemm_backend
         .act_addr       (a_addr),
         .wt_addr        (b_addr),
         .zero_pad       (1'b0),
-        .load_valid     (iter_valid),
-        .load_ready     (iter_ready),
+        .load_valid     (addr_gen_valid),
+        .load_ready     (load_req_ready),
         .act_mem_addr   (act_rd_addr),
         .act_mem_req    (act_rd_req),
         .act_mem_gnt    (act_rd_gnt),
@@ -131,6 +139,8 @@ module gemm_backend
         .pair_valid     (load_pair_valid),
         .pair_ready     (load_pair_ready)
     );
+
+    assign iter_ready = addr_gen_ready;
 
     // conv_accum + conv_array (reused)
     logic signed [ACC_W-1:0] acc_feedback, acc_out_val, pe_acc_out;
@@ -263,8 +273,8 @@ module gemm_backend
 
     /* verilator lint_off UNUSEDSIGNAL */
     logic wr_mem_wr;
-    /* verilator lint_on UNUSEDSIGNAL */
     logic wr_done;
+    /* verilator lint_on UNUSEDSIGNAL */
 
     conv_writer u_writer (
         .clk        (clk),
@@ -285,7 +295,7 @@ module gemm_backend
     // Gate done/busy so the backend waits for the write pipeline to drain
     logic  pipe_empty;
     assign pipe_empty = ~pp_trigger_r & ~pp_out_valid & ~wr_addr_valid
-                      &  pp_out_ready & ~wr_done;
+                      &  pp_out_ready;
 
     // ctrl_done is a 1-cycle pulse; latch it until the pipeline empties
     logic ctrl_finished;

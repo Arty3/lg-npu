@@ -16,9 +16,7 @@ module pool_ctrl
     input  logic                rst_n,
 
     // Command interface (from dispatch)
-    /* verilator lint_off UNUSEDSIGNAL */
-    input  conv_cmd_t           cmd,
-    /* verilator lint_on UNUSEDSIGNAL */
+    input  pool_cmd_t           cmd,
     input  logic                cmd_valid,
     output logic                cmd_ready,
 
@@ -68,6 +66,10 @@ module pool_ctrl
     // Outer loop indices: oh, ow, c
     dim_t oh_r, ow_r, c_r;
 
+    // Incremental spatial bases for current output element
+    logic [31:0] oh_base_r, ow_base_r;
+    logic [ADDR_W-1:0] out_pix_base_r;
+
     // Inner loop indices: r, s (within pooling window)
     dim_t r_r, s_r;
 
@@ -77,6 +79,7 @@ module pool_ctrl
 
     // Pool window size for AVG divider
     logic [15:0] pool_area_r;        // pool_r * pool_s
+    logic [ADDR_W-1:0] in_wxc_r;     // in_w * in_c (truncated to address width)
 
     // Serial restoring divider (for AVG)
     /* verilator lint_off UNUSEDSIGNAL */
@@ -106,30 +109,27 @@ module pool_ctrl
     end
 
     // Input coordinate computation (combinational)
-    // ih = oh * stride_h + r - pad_h,  iw = ow * stride_w + s - pad_w
-    logic signed [16:0] ih_w, iw_w;
+    // ih = oh_base + r - pad_h,  iw = ow_base + s - pad_w
+    logic signed [32:0] ih_w, iw_w;
     logic               oob_w;   // out of bounds
 
-    assign ih_w = $signed({1'b0, oh_r}) * $signed({1'b0, stride_h_r})
-                + $signed({1'b0, r_r})  - $signed({1'b0, pad_h_r});
-    assign iw_w = $signed({1'b0, ow_r}) * $signed({1'b0, stride_w_r})
-                + $signed({1'b0, s_r})  - $signed({1'b0, pad_w_r});
-    assign oob_w = (ih_w < 0) || (ih_w >= $signed({1'b0, in_h_r}))
-                || (iw_w < 0) || (iw_w >= $signed({1'b0, in_w_r}));
+    assign ih_w = $signed({1'b0, oh_base_r}) + $signed({16'b0, r_r})
+                - $signed({16'b0, pad_h_r});
+    assign iw_w = $signed({1'b0, ow_base_r}) + $signed({16'b0, s_r})
+                - $signed({16'b0, pad_w_r});
+    assign oob_w = (ih_w < 0) || (ih_w >= $signed({17'b0, in_h_r}))
+                || (iw_w < 0) || (iw_w >= $signed({17'b0, in_w_r}));
 
     // Read address: base + (ih * in_w + iw) * in_c + c
     logic [ADDR_W-1:0] rd_addr_w;
     assign rd_addr_w = in_base_r
-                     + ADDR_W'(ih_w[15:0]) * ADDR_W'(in_w_r) * ADDR_W'(in_c_r)
-                     + ADDR_W'(iw_w[15:0]) * ADDR_W'(in_c_r)
+                     + ADDR_W'(ADDR_W'(ih_w) * ADDR_W'(in_wxc_r))
+                     + ADDR_W'(ADDR_W'(iw_w) * ADDR_W'(in_c_r))
                      + ADDR_W'(c_r);
 
-    // Output address: out_base + (oh * out_w + ow) * in_c + c
+    // Output address: out_base + out_pix_base + c
     logic [ADDR_W-1:0] wr_addr_w;
-    assign wr_addr_w = out_base_r
-                     + ADDR_W'(oh_r) * ADDR_W'(out_w_r) * ADDR_W'(in_c_r)
-                     + ADDR_W'(ow_r) * ADDR_W'(in_c_r)
-                     + ADDR_W'(c_r);
+    assign wr_addr_w = out_base_r + out_pix_base_r + ADDR_W'(c_r);
 
     // Write data: result from MAX or serial divider for AVG
     logic signed [31:0] signed_quot_w;
@@ -239,25 +239,27 @@ module pool_ctrl
             out_h_r     <= '0;
             out_w_r     <= '0;
             pool_area_r <= '0;
+            in_wxc_r    <= '0;
         end
         else if (state == S_IDLE && cmd_valid)
         begin
-            in_base_r   <= cmd.act_in_addr;
-            out_base_r  <= cmd.act_out_addr;
+            in_base_r   <= cmd.in_addr;
+            out_base_r  <= cmd.out_addr;
             in_h_r      <= cmd.in_h;
             in_w_r      <= cmd.in_w;
             in_c_r      <= cmd.in_c;
-            pool_r_r    <= cmd.filt_r;
-            pool_s_r    <= cmd.filt_s;
+            pool_r_r    <= cmd.pool_r;
+            pool_s_r    <= cmd.pool_s;
             stride_h_r  <= cmd.stride_h;
             stride_w_r  <= cmd.stride_w;
             pad_h_r     <= cmd.pad_h;
             pad_w_r     <= cmd.pad_w;
-            pool_mode_r <= cmd.quant_shift[0];
-            // Compute output dimensions
-            out_h_r     <= (cmd.in_h + 2 * cmd.pad_h - cmd.filt_r) / cmd.stride_h + 1;
-            out_w_r     <= (cmd.in_w + 2 * cmd.pad_w - cmd.filt_s) / cmd.stride_w + 1;
-            pool_area_r <= cmd.filt_r[7:0] * cmd.filt_s[7:0];
+            pool_mode_r <= cmd.pool_mode;
+            // Host precomputes output shape to avoid runtime divider inference.
+            out_h_r     <= cmd.out_h;
+            out_w_r     <= cmd.out_w;
+            pool_area_r <= cmd.pool_r[7:0] * cmd.pool_s[7:0];
+            in_wxc_r    <= ADDR_W'({16'b0, cmd.in_w} * {16'b0, cmd.in_c});
         end
     end
 
@@ -269,12 +271,18 @@ module pool_ctrl
             oh_r <= '0;
             ow_r <= '0;
             c_r  <= '0;
+            oh_base_r    <= '0;
+            ow_base_r    <= '0;
+            out_pix_base_r <= '0;
         end
         else if (state == S_LOAD_CFG)
         begin
             oh_r <= '0;
             ow_r <= '0;
             c_r  <= '0;
+            oh_base_r    <= '0;
+            ow_base_r    <= '0;
+            out_pix_base_r <= '0;
         end
         else if (state == S_WR && out_wr_gnt && !last_output_w)
         begin
@@ -283,12 +291,18 @@ module pool_ctrl
             else
             begin
                 c_r <= '0;
+                out_pix_base_r <= out_pix_base_r + ADDR_W'(in_c_r);
                 if (ow_r < out_w_r - 1)
+                begin
                     ow_r <= ow_r + 1;
+                    ow_base_r <= ow_base_r + {16'b0, stride_w_r};
+                end
                 else
                 begin
                     ow_r <= '0;
                     oh_r <= oh_r + 1;
+                    ow_base_r <= '0;
+                    oh_base_r <= oh_base_r + {16'b0, stride_h_r};
                 end
             end
         end

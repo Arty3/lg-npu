@@ -94,8 +94,8 @@ Reference vectors are generated from Python models:
 make vectors
 ```
 
-This runs `model/vectors/gen_conv_vectors.py` and
-`model/vectors/gen_quant_vectors.py`, placing output files in `tb/vectors/`.
+This runs `model/vectors/gen_conv_vectors.py`, placing output files in
+`tb/vectors/`.
 Testbenches load these vectors to compare RTL output against the golden
 reference.
 
