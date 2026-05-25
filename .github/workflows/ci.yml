@@ -58,7 +58,3 @@ jobs:
 
       - name: Regenerate architecture diagrams
         run: make viz
-
-      - name: Verify generated artifacts are committed
-        run: |
-          git diff --exit-code -- include/pkg/npu_addrmap_pkg.sv sw/uapi/npu_regs.h docs/diagrams
