@@ -1,31 +1,31 @@
 # lg-npu - Top-level Makefile
 
-REPO_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-FILELIST  := tools/lint/rtl.f
-TOP       := npu_shell
-SIM_BUILD   := sim/build
-SYNTH_BUILD := syn/build
-VEC_DIR     := tb/vectors
-WAVE_DIR    := sim/waves
+REPO_ROOT      := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+FILELIST       := tools/lint/rtl.f
+TOP            := npu_shell
+SIM_BUILD      := sim/build
+SYNTH_BUILD    := syn/build
+VEC_DIR        := tb/vectors
+WAVE_DIR       := sim/waves
 
-VERILATOR := verilator
-PYTHON    := python3
+VERILATOR      := verilator
+PYTHON         := python3
 
-CC       := gcc
-SW_STD   := -std=c17
-SW_WARN  := -Wall -Wextra -Wpedantic -Werror \
-            -Wcast-align -Wcast-qual -Wconversion -Wdouble-promotion \
-            -Wfloat-equal -Wformat=2 -Wformat-nonliteral -Wformat-security \
-            -Wimplicit-fallthrough -Wmissing-declarations \
-            -Wmissing-field-initializers -Wnull-dereference -Wpacked \
-            -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-conversion \
-            -Wstrict-overflow=5 -Wswitch-default -Wswitch-enum -Wundef \
-            -Wuninitialized -Wunreachable-code -Wunused -Wvla -Wwrite-strings
-SW_OPT   := -Ofast -flto
-SW_FLAGS := $(SW_STD) $(SW_WARN) $(SW_OPT)
-SW_PIC   := -fPIC -fvisibility=hidden
-SW_BUILD := sw/build
-SW_TEST_BUILD := sw/build/tests
+CC             := gcc
+SW_STD         := -std=c17
+SW_WARN        := -Wall -Wextra -Wpedantic -Werror \
+                  -Wcast-align -Wcast-qual -Wconversion -Wdouble-promotion \
+                  -Wfloat-equal -Wformat=2 -Wformat-nonliteral -Wformat-security \
+                  -Wimplicit-fallthrough -Wmissing-declarations \
+                  -Wmissing-field-initializers -Wnull-dereference -Wpacked \
+                  -Wpointer-arith -Wredundant-decls -Wshadow -Wsign-conversion \
+                  -Wstrict-overflow=5 -Wswitch-default -Wswitch-enum -Wundef \
+                  -Wuninitialized -Wunreachable-code -Wunused -Wvla -Wwrite-strings
+SW_OPT         := -Ofast -flto
+SW_FLAGS       := $(SW_STD) $(SW_WARN) $(SW_OPT)
+SW_PIC         := -fPIC -fvisibility=hidden
+SW_BUILD       := sw/build
+SW_TEST_BUILD  := sw/build/tests
 
 SW_RUNTIME_SRC := sw/runtime/command_builder.c \
                   sw/runtime/submit.c \
@@ -34,12 +34,12 @@ SW_RUNTIME_SRC := sw/runtime/command_builder.c \
 SW_RUNTIME_OBJ := $(patsubst sw/runtime/%.c,$(SW_BUILD)/%.o,$(SW_RUNTIME_SRC))
 
 # Common verilator flags
-VFLAGS := --sv --cc --exe --build \
-          --top-module $(TOP) \
-          -Wall -Wno-MULTITOP \
-          --trace \
-          -CFLAGS "-std=c++17 -I$(REPO_ROOT)tb/integration" \
-          -f $(FILELIST)
+VFLAGS         := --sv --cc --exe --build \
+                  --top-module $(TOP) \
+                  -Wall -Wno-MULTITOP \
+                  --trace \
+                  -CFLAGS "-std=c++17 -I$(REPO_ROOT)tb/integration" \
+                  -f $(FILELIST)
 
 .PHONY: help
 help: ## Show available targets
