@@ -28,31 +28,32 @@ static PerfSnapshot run_and_measure(NpuTb& tb,
     tb.load_bytes(ACT_BUF_BASE, act);
 
     // Read perf counters before
-    uint32_t cyc_pre  = tb.mmio_read(REG_PERF_CYCLES);
-    uint32_t act_pre  = tb.mmio_read(REG_PERF_ACTIVE);
-    uint32_t stl_pre  = tb.mmio_read(REG_PERF_STALL);
+    const uint32_t cyc_pre = tb.mmio_read(REG_PERF_CYCLES);
+    const uint32_t act_pre = tb.mmio_read(REG_PERF_ACTIVE);
+    const uint32_t stl_pre = tb.mmio_read(REG_PERF_STALL);
 
     ConvDesc desc{};
     desc.opcode       = 1;
     desc.act_out_addr = 2048;
-    desc.in_h = static_cast<uint32_t>(H);
-    desc.in_w = static_cast<uint32_t>(W);
-    desc.in_c = static_cast<uint32_t>(C);
-    desc.out_k = static_cast<uint32_t>(K);
-    desc.filt_r = static_cast<uint32_t>(R);
-    desc.filt_s = static_cast<uint32_t>(S);
-    desc.stride_h = static_cast<uint32_t>(sh);
-    desc.stride_w = static_cast<uint32_t>(sw);
-    desc.pad_h = static_cast<uint32_t>(ph);
-    desc.pad_w = static_cast<uint32_t>(pw);
+    desc.in_h       = static_cast<uint32_t>(H);
+    desc.in_w       = static_cast<uint32_t>(W);
+    desc.in_c       = static_cast<uint32_t>(C);
+    desc.out_k      = static_cast<uint32_t>(K);
+    desc.filt_r     = static_cast<uint32_t>(R);
+    desc.filt_s     = static_cast<uint32_t>(S);
+    desc.stride_h   = static_cast<uint32_t>(sh);
+    desc.stride_w   = static_cast<uint32_t>(sw);
+    desc.pad_h      = static_cast<uint32_t>(ph);
+    desc.pad_w      = static_cast<uint32_t>(pw);
     desc.quant_shift = static_cast<uint32_t>(qshift);
+
     tb.submit_conv(desc);
     tb.wait_idle();
 
     // Read perf counters after
-    uint32_t cyc_post = tb.mmio_read(REG_PERF_CYCLES);
-    uint32_t act_post = tb.mmio_read(REG_PERF_ACTIVE);
-    uint32_t stl_post = tb.mmio_read(REG_PERF_STALL);
+    const uint32_t cyc_post = tb.mmio_read(REG_PERF_CYCLES);
+    const uint32_t act_post = tb.mmio_read(REG_PERF_ACTIVE);
+    const uint32_t stl_post = tb.mmio_read(REG_PERF_STALL);
 
     return PerfSnapshot
     {
@@ -66,12 +67,20 @@ static PerfSnapshot run_and_measure(NpuTb& tb,
 static bool test_perf_counters_increment(TestResult& r)
 {
     printf("[test] perf_counters_increment\n");
+
     NpuTb tb("sim/waves/perf_tests.vcd");
     tb.reset();
     tb.enable();
 
-    auto act = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto act = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
+    auto wt = std::vector<int8_t>(9, 1);
 
     auto snap = run_and_measure(tb, act, wt, 4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0);
 
@@ -96,8 +105,11 @@ static bool test_perf_counters_increment(TestResult& r)
         pass = false;
     }
 
-    if (pass) printf("  [PASS] perf_counters_increment\n");
+    if (pass)
+        printf("  [PASS] perf_counters_increment\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -113,7 +125,7 @@ static bool test_perf_scales_with_size(TestResult& r)
     tb1.reset();
     tb1.enable();
     auto act1 = std::vector<int8_t>(16, 1);
-    auto wt1  = std::vector<int8_t>(9, 1);
+    auto wt1 = std::vector<int8_t>(9, 1);
     auto snap1 = run_and_measure(tb1, act1, wt1, 4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0);
 
     // Larger: 6x6x1 k=3 -> 4x4 = 16 output pixels, 144 MACs
@@ -121,7 +133,7 @@ static bool test_perf_scales_with_size(TestResult& r)
     tb2.reset();
     tb2.enable();
     auto act2 = std::vector<int8_t>(36, 1);
-    auto wt2  = std::vector<int8_t>(9, 1);
+    auto wt2 = std::vector<int8_t>(9, 1);
     auto snap2 = run_and_measure(tb2, act2, wt2, 6, 6, 1, 1, 3, 3, 1, 1, 0, 0, 0);
 
     printf("    small: cycles=%u active=%u | large: cycles=%u active=%u\n",
@@ -133,8 +145,11 @@ static bool test_perf_scales_with_size(TestResult& r)
         pass = false;
     }
 
-    if (pass) printf("  [PASS] perf_scales_with_size\n");
+    if (pass)
+        printf("  [PASS] perf_scales_with_size\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -142,26 +157,33 @@ static bool test_perf_scales_with_size(TestResult& r)
 static bool test_perf_reset_clears(TestResult& r)
 {
     printf("[test] perf_reset_clears\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
 
     // Run a conv to get non-zero counters
     auto act = std::vector<int8_t>(16, 1);
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto wt = std::vector<int8_t>(9, 1);
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
 
     ConvDesc desc{};
-    desc.opcode = 1;
+    desc.opcode       = 1;
     desc.act_out_addr = 2048;
-    desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-    desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-    desc.stride_h = 1; desc.stride_w = 1;
+    desc.in_h         = 4;
+    desc.in_w         = 4;
+    desc.in_c         = 1;
+    desc.out_k        = 1;
+    desc.filt_r       = 3;
+    desc.filt_s       = 3;
+    desc.stride_h     = 1;
+    desc.stride_w     = 1;
+
     tb.submit_conv(desc);
     tb.wait_idle();
 
-    uint32_t cyc_pre = tb.mmio_read(REG_PERF_CYCLES);
+    const uint32_t cyc_pre = tb.mmio_read(REG_PERF_CYCLES);
     if (cyc_pre == 0)
     {
         printf("  [FAIL] perf_reset_clears: cycles counter is 0 before reset\n");
@@ -172,9 +194,9 @@ static bool test_perf_reset_clears(TestResult& r)
     // Soft reset
     tb.soft_reset_pulse();
 
-    uint32_t cyc_post = tb.mmio_read(REG_PERF_CYCLES);
-    uint32_t act_post = tb.mmio_read(REG_PERF_ACTIVE);
-    uint32_t stl_post = tb.mmio_read(REG_PERF_STALL);
+    const uint32_t cyc_post = tb.mmio_read(REG_PERF_CYCLES);
+    const uint32_t act_post = tb.mmio_read(REG_PERF_ACTIVE);
+    const uint32_t stl_post = tb.mmio_read(REG_PERF_STALL);
 
     bool pass = true;
     // After soft reset, counters should be very small (they may count
@@ -195,12 +217,15 @@ static bool test_perf_reset_clears(TestResult& r)
         pass = false;
     }
 
-    if (pass) printf("  [PASS] perf_reset_clears\n");
+    if (pass)
+        printf("  [PASS] perf_reset_clears\n");
+
     r.record(pass);
+
     return pass;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     Verilated::commandArgs(argc, argv);
     TestResult results;

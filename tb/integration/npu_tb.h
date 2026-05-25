@@ -9,39 +9,39 @@
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 
+#include <unordered_map>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 // Address map (matches npu_addrmap_pkg.sv)
-static constexpr uint32_t REG_CTRL        = 0x00000;
-static constexpr uint32_t REG_STATUS      = 0x00004;
-static constexpr uint32_t REG_DOORBELL    = 0x00008;
-static constexpr uint32_t REG_IRQ_STATUS  = 0x0000C;
-static constexpr uint32_t REG_IRQ_ENABLE  = 0x00010;
-static constexpr uint32_t REG_IRQ_CLEAR   = 0x00014;
-static constexpr uint32_t REG_FEATURE_ID  = 0x00018;
-static constexpr uint32_t REG_PERF_CYCLES = 0x00020;
-static constexpr uint32_t REG_PERF_ACTIVE = 0x00024;
-static constexpr uint32_t REG_PERF_STALL  = 0x00028;
+static constexpr uint32_t REG_CTRL         = 0x00000;
+static constexpr uint32_t REG_STATUS       = 0x00004;
+static constexpr uint32_t REG_DOORBELL     = 0x00008;
+static constexpr uint32_t REG_IRQ_STATUS   = 0x0000C;
+static constexpr uint32_t REG_IRQ_ENABLE   = 0x00010;
+static constexpr uint32_t REG_IRQ_CLEAR    = 0x00014;
+static constexpr uint32_t REG_FEATURE_ID   = 0x00018;
+static constexpr uint32_t REG_PERF_CYCLES  = 0x00020;
+static constexpr uint32_t REG_PERF_ACTIVE  = 0x00024;
+static constexpr uint32_t REG_PERF_STALL   = 0x00028;
 static constexpr uint32_t REG_DMA_EXT_ADDR = 0x00030;
 static constexpr uint32_t REG_DMA_LOC_ADDR = 0x00034;
 static constexpr uint32_t REG_DMA_LEN      = 0x00038;
 static constexpr uint32_t REG_DMA_CTRL     = 0x0003C;
 static constexpr uint32_t REG_DMA_STATUS   = 0x00040;
-static constexpr uint32_t CMD_QUEUE_BASE  = 0x01000;
-static constexpr uint32_t WEIGHT_BUF_BASE = 0x10000;
-static constexpr uint32_t ACT_BUF_BASE    = 0x20000;
-static constexpr uint32_t PSUM_BUF_BASE   = 0x30000;
+static constexpr uint32_t CMD_QUEUE_BASE   = 0x01000;
+static constexpr uint32_t WEIGHT_BUF_BASE  = 0x10000;
+static constexpr uint32_t ACT_BUF_BASE     = 0x20000;
+static constexpr uint32_t PSUM_BUF_BASE    = 0x30000;
 
 // CTRL register bits
-static constexpr uint32_t CTRL_SOFT_RESET_BIT = 0;
-static constexpr uint32_t CTRL_ENABLE_BIT     = 1;
+static constexpr uint32_t CTRL_SOFT_RESET_BIT   = 0;
+static constexpr uint32_t CTRL_ENABLE_BIT       = 1;
 
 // Status register bits
 static constexpr uint32_t STATUS_IDLE_BIT       = 0;
@@ -49,8 +49,8 @@ static constexpr uint32_t STATUS_BUSY_BIT       = 1;
 static constexpr uint32_t STATUS_QUEUE_FULL_BIT = 2;
 
 // DMA control bits
-static constexpr uint32_t DMA_CTRL_START_BIT = 0;
-static constexpr uint32_t DMA_CTRL_DIR_BIT   = 1;
+static constexpr uint32_t DMA_CTRL_START_BIT    = 0;
+static constexpr uint32_t DMA_CTRL_DIR_BIT      = 1;
 
 // Convolution command descriptor (16 words)
 struct ConvDesc
@@ -101,14 +101,14 @@ struct ConvDesc
 // GEMM command descriptor (16 words, same transport as ConvDesc)
 struct GemmDesc
 {
-    uint32_t opcode    = 2;  // OP_GEMM
-    uint32_t a_addr    = 0;  // Matrix A base (activation buffer)
-    uint32_t c_addr    = 0;  // Output matrix C base (activation buffer)
-    uint32_t b_addr    = 0;  // Matrix B base (weight buffer)
-    uint32_t bias_addr = 0;  // Bias vector base (weight buffer)
-    uint32_t m_dim     = 0;
-    uint32_t n_dim     = 0;
-    uint32_t k_dim     = 0;
+    uint32_t opcode      = 2;  // OP_GEMM
+    uint32_t a_addr      = 0;  // Matrix A base (activation buffer)
+    uint32_t c_addr      = 0;  // Output matrix C base (activation buffer)
+    uint32_t b_addr      = 0;  // Matrix B base (weight buffer)
+    uint32_t bias_addr   = 0;  // Bias vector base (weight buffer)
+    uint32_t m_dim       = 0;
+    uint32_t n_dim       = 0;
+    uint32_t k_dim       = 0;
     uint32_t quant_shift = 0;
     uint32_t act_mode    = 0; // ACT_MODE_NONE
 
@@ -267,8 +267,9 @@ inline uint16_t isqrt_hw(uint32_t n)
 //   std = isqrt(var+1), out = clamp(((x-mean)<<shift)/std, -128, 127)
 inline std::vector<int8_t> ref_lnorm(
     const std::vector<int8_t>& input,
-    int num_rows, int row_len,
-    int norm_shift)
+    int                        num_rows,
+    int                        row_len,
+    int                        norm_shift)
 {
     std::vector<int8_t> out(num_rows * row_len);
     for (int r = 0; r < num_rows; ++r)
@@ -335,11 +336,16 @@ inline std::vector<int8_t> ref_lnorm(
 //   2D spatial pooling over NHWC data with stride and padding.
 inline std::vector<int8_t> ref_pool(
     const std::vector<int8_t>& input,
-    int H, int W, int C,
-    int pool_r, int pool_s,
-    int stride_h, int stride_w,
-    int pad_h, int pad_w,
-    int pool_mode)
+    int                        H,
+    int                        W,
+    int                        C,
+    int                        pool_r,
+    int                        pool_s,
+    int                        stride_h,
+    int                        stride_w,
+    int                        pad_h,
+    int                        pad_w,
+    int                        pool_mode)
 {
     int OH = (H + 2 * pad_h - pool_r) / stride_h + 1;
     int OW = (W + 2 * pad_w - pool_s) / stride_w + 1;
@@ -421,9 +427,11 @@ inline std::vector<int8_t> ref_gemm(
     const std::vector<int8_t>& a,
     const std::vector<int8_t>& b,
     const std::vector<int8_t>& bias,
-    int M, int N, int K,
-    int quant_shift,
-    uint32_t act_mode = ACT_MODE_NONE)
+    int                        M,
+    int                        N,
+    int                        K,
+    int                        quant_shift,
+    uint32_t                   act_mode = ACT_MODE_NONE)
 {
     std::vector<int8_t> out(M * N);
     for (int m = 0; m < M; ++m)
@@ -461,10 +469,18 @@ inline std::vector<int8_t> ref_conv(
     const std::vector<int8_t>& act,
     const std::vector<int8_t>& wt,
     const std::vector<int8_t>& bias,
-    int H, int W, int C, int K, int R, int S,
-    int stride_h, int stride_w, int pad_h, int pad_w,
-    int quant_shift,
-    uint32_t act_mode = ACT_MODE_RELU)
+    int                        H,
+    int                        W,
+    int                        C,
+    int                        K,
+    int                        R,
+    int                        S,
+    int                        stride_h,
+    int                        stride_w,
+    int                        pad_h,
+    int                        pad_w,
+    int                        quant_shift,
+    uint32_t                   act_mode = ACT_MODE_RELU)
 {
     int OH = (H + 2 * pad_h - R) / stride_h + 1;
     int OW = (W + 2 * pad_w - S) / stride_w + 1;
@@ -541,7 +557,8 @@ inline uint16_t softmax_exp_approx(uint8_t diff)
 //   bit-exact matching.
 inline std::vector<int8_t> ref_softmax(
     const std::vector<int8_t>& input,
-    int num_rows, int row_len)
+    int                        num_rows,
+    int                        row_len)
 {
     std::vector<int8_t> out(num_rows * row_len);
     for (int r = 0; r < num_rows; ++r)
@@ -580,10 +597,10 @@ inline std::vector<int8_t> ref_softmax(
 inline std::vector<int8_t> ref_vec(
     const std::vector<int8_t>& a,
     const std::vector<int8_t>& b,
-    int length,
-    uint32_t vec_op,
-    int quant_shift = 0,
-    uint32_t act_mode = ACT_MODE_NONE)
+    int                        length,
+    uint32_t                   vec_op,
+    int                        quant_shift = 0,
+    uint32_t                   act_mode    = ACT_MODE_NONE)
 {
     std::vector<int8_t> out(length);
     for (int i = 0; i < length; ++i)
@@ -591,8 +608,10 @@ inline std::vector<int8_t> ref_vec(
         if (vec_op == 0)
         {
             int32_t sum = static_cast<int32_t>(a[i]) + static_cast<int32_t>(b[i]);
-            if (sum > 127) sum = 127;
-            if (sum < -128) sum = -128;
+            if (sum > 127)
+                sum = 127;
+            if (sum < -128)
+                sum = -128;
             out[i] = static_cast<int8_t>(sum);
         }
         else
@@ -607,8 +626,12 @@ inline std::vector<int8_t> ref_vec(
                 if (acc < 0) acc >>= LEAKY_SHIFT;
             }
             acc >>= quant_shift;
-            if (acc > 127) acc = 127;
-            if (acc < -128) acc = -128;
+
+            if (acc > 127)
+                acc = 127;
+            if (acc < -128)
+                acc = -128;
+
             out[i] = static_cast<int8_t>(acc);
         }
     }
@@ -618,14 +641,14 @@ inline std::vector<int8_t> ref_vec(
 // Testbench wrapper around Vnpu_shell
 class NpuTb
 {
-    Vnpu_shell    *dut;
-    VerilatedVcdC *trace;
-    uint64_t       sim_time;
-    bool           trace_enabled;
+    Vnpu_shell* dut;
+    VerilatedVcdC* trace;
+    uint64_t sim_time;
+    bool trace_enabled;
 
     // External memory model
     std::unordered_map<uint32_t, uint32_t> ext_memory;
-    bool     ext_rd_pending;
+    bool ext_rd_pending;
     uint32_t ext_rd_addr_pending;
 
     void update_ext_mem()
@@ -691,18 +714,27 @@ public:
         delete dut;
     }
 
-    Vnpu_shell *raw() { return dut; }
-    uint64_t time() const { return sim_time; }
+    Vnpu_shell* raw()
+    {
+        return dut;
+    }
+
+    uint64_t time() const
+    {
+        return sim_time;
+    }
 
     void tick()
     {
         dut->clk = 0;
         dut->eval();
-        if (trace) trace->dump(sim_time++);
+        if (trace)
+            trace->dump(sim_time++);
         update_ext_mem();
         dut->clk = 1;
         dut->eval();
-        if (trace) trace->dump(sim_time++);
+        if (trace)
+            trace->dump(sim_time++);
     }
 
     void reset(int cycles = 10)
@@ -715,8 +747,10 @@ public:
         dut->ext_mem_gnt    = 0;
         dut->ext_mem_rdata  = 0;
         dut->ext_mem_rvalid = 0;
+
         ext_rd_pending = false;
-        for (int i = 0; i < cycles; ++i) tick();
+        for (int i = 0; i < cycles; ++i)
+            tick();
         dut->rst_async_n = 1;
         tick(); tick();
     }
@@ -727,7 +761,10 @@ public:
         dut->mmio_wdata = data;
         dut->mmio_wr    = 1;
         dut->mmio_valid = 1;
-        do { tick(); } while (!dut->mmio_ready);
+        do
+        {
+            tick();
+        }   while (!dut->mmio_ready);
         dut->mmio_valid = 0;
         dut->mmio_wr    = 0;
     }
@@ -737,7 +774,10 @@ public:
         dut->mmio_addr  = addr;
         dut->mmio_wr    = 0;
         dut->mmio_valid = 1;
-        do { tick(); } while (!dut->mmio_ready);
+        do
+        {
+            tick();
+        }   while (!dut->mmio_ready);
         uint32_t data = dut->mmio_rdata;
         dut->mmio_valid = 0;
         return data;
@@ -751,7 +791,10 @@ public:
     void soft_reset_pulse()
     {
         mmio_write(REG_CTRL, 1u << CTRL_SOFT_RESET_BIT);
-        for (int i = 0; i < 5; ++i) tick();
+
+        for (int i = 0; i < 5; ++i)
+            tick();
+
         mmio_write(REG_CTRL, 1u << CTRL_ENABLE_BIT);
     }
 
@@ -776,7 +819,7 @@ public:
     }
 
     // Load a byte array into an SRAM window starting at mmio_base
-    void load_bytes(uint32_t mmio_base, const int8_t *data, int count)
+    void load_bytes(uint32_t mmio_base, const int8_t* data, int count)
     {
         for (int i = 0; i < count; ++i)
             mmio_write(mmio_base + static_cast<uint32_t>(i),
@@ -801,12 +844,14 @@ public:
     }
 
     // Submit a convolution command and ring the doorbell
-    void submit_conv(const ConvDesc &desc)
+    void submit_conv(const ConvDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         // Free-run to let the command pipeline fetch, decode, and begin
         // execution without competing for SRAM ports with MMIO reads
@@ -815,56 +860,66 @@ public:
     }
 
     // Submit a GEMM command and ring the doorbell
-    void submit_gemm(const GemmDesc &desc)
+    void submit_gemm(const GemmDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         run_clocks(2000);
     }
 
     // Submit a softmax command and ring the doorbell
-    void submit_softmax(const SoftmaxDesc &desc)
+    void submit_softmax(const SoftmaxDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         run_clocks(2000);
     }
 
     // Submit a vec command and ring the doorbell
-    void submit_vec(const VecDesc &desc)
+    void submit_vec(const VecDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         run_clocks(2000);
     }
 
     // Submit a lnorm command and ring the doorbell
-    void submit_lnorm(const LnormDesc &desc)
+    void submit_lnorm(const LnormDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         run_clocks(2000);
     }
 
     // Submit a pool command and ring the doorbell
-    void submit_pool(const PoolDesc &desc)
+    void submit_pool(const PoolDesc& desc)
     {
         uint32_t words[16];
         desc.to_words(words);
+
         for (int i = 0; i < 16; ++i)
             mmio_write(CMD_QUEUE_BASE + static_cast<uint32_t>(i) * 4, words[i]);
+
         mmio_write(REG_DOORBELL, 1);
         run_clocks(2000);
     }
@@ -874,33 +929,42 @@ public:
     bool wait_idle(int max_polls = 200000)
     {
         for (int i = 0; i < max_polls; ++i)
-        {
-            if (is_idle()) return true;
-        }
+            if (is_idle())
+                return true;
+
         return false;
     }
 
     // Free-run the clock for N cycles (no MMIO activity)
     void run_clocks(int n)
     {
-        for (int i = 0; i < n; ++i) tick();
+        for (int i = 0; i < n; ++i)
+            tick();
     }
 
     // Run a convolution end-to-end: load data, fire command, wait, read back.
     // Returns true on match with expected output.
     bool run_conv_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& act,
         const std::vector<int8_t>& wt,
         const std::vector<int8_t>& bias,
-        int H, int W, int C, int K, int R, int S,
-        int sh, int sw, int ph, int pw,
-        int qshift,
-        uint32_t act_mode     = ACT_MODE_RELU,
-        uint32_t act_in_addr  = 0,
-        uint32_t wt_addr      = 0,
-        uint32_t bias_addr    = 0,
-        uint32_t act_out_addr = 2048)
+        int                        H,
+        int                        W,
+        int                        C,
+        int                        K,
+        int                        R,
+        int                        S,
+        int                        sh,
+        int                        sw,
+        int                        ph,
+        int                        pw,
+        int                        qshift,
+        uint32_t                   act_mode     = ACT_MODE_RELU,
+        uint32_t                   act_in_addr  = 0,
+        uint32_t                   wt_addr      = 0,
+        uint32_t                   bias_addr    = 0,
+        uint32_t                   act_out_addr = 2048)
     {
         // Compute reference
         auto expected = ref_conv(act, wt, bias, H, W, C, K, R, S,
@@ -945,6 +1009,7 @@ public:
         desc.pad_w        = static_cast<uint32_t>(pw);
         desc.quant_shift  = static_cast<uint32_t>(qshift);
         desc.act_mode     = act_mode;
+
         submit_conv(desc);
 
         // Wait for completion
@@ -966,25 +1031,29 @@ public:
                 pass = false;
             }
         }
+
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
     // Run a GEMM end-to-end: load data, fire command, wait, read back.
     // Returns true on match with expected output.
     bool run_gemm_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& a,
         const std::vector<int8_t>& b,
         const std::vector<int8_t>& bias,
-        int M, int N, int K,
-        int qshift,
-        uint32_t act_mode  = ACT_MODE_NONE,
-        uint32_t a_addr    = 0,
-        uint32_t b_addr    = 0,
-        uint32_t bias_addr = 0,
-        uint32_t c_addr    = 2048)
+        int                        M,
+        int                        N,
+        int                        K,
+        int                        qshift,
+        uint32_t                   act_mode  = ACT_MODE_NONE,
+        uint32_t                   a_addr    = 0,
+        uint32_t                   b_addr    = 0,
+        uint32_t                   bias_addr = 0,
+        uint32_t                   c_addr    = 2048)
     {
         auto expected = ref_gemm(a, b, bias, M, N, K, qshift, act_mode);
         int out_size = static_cast<int>(expected.size());
@@ -1019,6 +1088,7 @@ public:
         desc.k_dim       = static_cast<uint32_t>(K);
         desc.quant_shift = static_cast<uint32_t>(qshift);
         desc.act_mode    = act_mode;
+
         submit_gemm(desc);
 
         if (!wait_idle())
@@ -1038,18 +1108,21 @@ public:
                 pass = false;
             }
         }
+
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
     // Run a softmax end-to-end: load data, fire command, wait, read back.
     bool run_softmax_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& input,
-        int num_rows, int row_len,
-        uint32_t in_addr  = 0,
-        uint32_t out_addr = 2048)
+        int                        num_rows,
+        int                        row_len,
+        uint32_t                   in_addr  = 0,
+        uint32_t                   out_addr = 2048)
     {
         auto expected = ref_softmax(input, num_rows, row_len);
         int out_size = static_cast<int>(expected.size());
@@ -1061,6 +1134,7 @@ public:
         desc.out_addr = out_addr;
         desc.num_rows = static_cast<uint32_t>(num_rows);
         desc.row_len  = static_cast<uint32_t>(row_len);
+
         submit_softmax(desc);
 
         if (!wait_idle())
@@ -1080,23 +1154,25 @@ public:
                 pass = false;
             }
         }
+
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
     // Run a vec op end-to-end: load data, fire command, wait, read back.
     bool run_vec_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& a,
         const std::vector<int8_t>& b,
-        int length,
-        uint32_t vec_op,
-        int qshift            = 0,
-        uint32_t act_mode     = ACT_MODE_NONE,
-        uint32_t a_addr       = 0,
-        uint32_t b_addr       = 0,
-        uint32_t out_addr     = 2048)
+        int                        length,
+        uint32_t                   vec_op,
+        int                        qshift   = 0,
+        uint32_t                   act_mode = ACT_MODE_NONE,
+        uint32_t                   a_addr   = 0,
+        uint32_t                   b_addr   = 0,
+        uint32_t                   out_addr = 2048)
     {
         auto expected = ref_vec(a, b, length, vec_op, qshift, act_mode);
         int out_size = static_cast<int>(expected.size());
@@ -1112,6 +1188,7 @@ public:
         desc.vec_op      = vec_op;
         desc.quant_shift = static_cast<uint32_t>(qshift);
         desc.act_mode    = act_mode;
+
         submit_vec(desc);
 
         if (!wait_idle())
@@ -1131,19 +1208,22 @@ public:
                 pass = false;
             }
         }
+
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
     // Run a lnorm op end-to-end: load data, fire command, wait, read back.
     bool run_lnorm_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& input,
-        int num_rows, int row_len,
-        int norm_shift,
-        uint32_t in_addr  = 0,
-        uint32_t out_addr = 2048)
+        int                        num_rows,
+        int                        row_len,
+        int                        norm_shift,
+        uint32_t                   in_addr  = 0,
+        uint32_t                   out_addr = 2048)
     {
         auto expected = ref_lnorm(input, num_rows, row_len, norm_shift);
         int out_size = static_cast<int>(expected.size());
@@ -1156,6 +1236,7 @@ public:
         desc.num_rows   = static_cast<uint32_t>(num_rows);
         desc.row_len    = static_cast<uint32_t>(row_len);
         desc.norm_shift = static_cast<uint32_t>(norm_shift);
+
         submit_lnorm(desc);
 
         if (!wait_idle())
@@ -1175,22 +1256,29 @@ public:
                 pass = false;
             }
         }
+
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
     // Run a pool op end-to-end: load data, fire command, wait, read back.
     bool run_pool_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& input,
-        int H, int W, int C,
-        int pool_r, int pool_s,
-        int sh, int sw,
-        int ph, int pw,
-        int pool_mode,
-        uint32_t in_addr  = 0,
-        uint32_t out_addr = 2048)
+        int                        H,
+        int                        W,
+        int                        C,
+        int                        pool_r,
+        int                        pool_s,
+        int                        sh,
+        int                        sw,
+        int                        ph,
+        int                        pw,
+        int                        pool_mode,
+        uint32_t                   in_addr  = 0,
+        uint32_t                   out_addr = 2048)
     {
         auto expected = ref_pool(input, H, W, C, pool_r, pool_s,
                                  sh, sw, ph, pw, pool_mode);
@@ -1211,6 +1299,7 @@ public:
         desc.pad_h     = static_cast<uint32_t>(ph);
         desc.pad_w     = static_cast<uint32_t>(pw);
         desc.pool_mode = static_cast<uint32_t>(pool_mode);
+
         submit_pool(desc);
 
         if (!wait_idle())
@@ -1232,6 +1321,7 @@ public:
         }
         if (pass)
             printf("  [PASS] %s (%d outputs verified)\n", name, out_size);
+
         return pass;
     }
 
@@ -1247,7 +1337,7 @@ public:
         return (it != ext_memory.end()) ? it->second : 0;
     }
 
-    void ext_load_bytes(uint32_t base, const int8_t *data, int count)
+    void ext_load_bytes(uint32_t base, const int8_t* data, int count)
     {
         for (int i = 0; i < count; ++i)
             ext_memory[base + static_cast<uint32_t>(i)] =
@@ -1273,8 +1363,12 @@ public:
 
     // Start a DMA transfer and wait for idle.
     // dir=0: ext->local (read), dir=1: local->ext (write)
-    bool dma_transfer(uint32_t ext_addr, uint32_t loc_addr,
-                      uint32_t len, uint32_t dir, int max_polls = 200000)
+    bool dma_transfer(
+        uint32_t ext_addr,
+        uint32_t loc_addr,
+        uint32_t len,
+        uint32_t dir,
+        int      max_polls = 200000)
     {
         mmio_write(REG_DMA_EXT_ADDR, ext_addr);
         mmio_write(REG_DMA_LOC_ADDR, loc_addr);
@@ -1288,10 +1382,10 @@ public:
     // Run a DMA read test: load data into ext memory, DMA to local buffer,
     // read back via MMIO and compare.
     bool run_dma_read_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& data,
-        uint32_t ext_addr,
-        uint32_t loc_mmio_addr)
+        uint32_t                   ext_addr,
+        uint32_t                   loc_mmio_addr)
     {
         int count = static_cast<int>(data.size());
 
@@ -1322,16 +1416,17 @@ public:
         }
         if (pass)
             printf("  [PASS] %s (%d bytes verified)\n", name, count);
+    
         return pass;
     }
 
     // Run a DMA write test: load data into local buffer via MMIO, DMA to ext
     // memory, read back from ext model and compare.
     bool run_dma_write_test(
-        const char* name,
+        const char*                name,
         const std::vector<int8_t>& data,
-        uint32_t loc_mmio_addr,
-        uint32_t ext_addr)
+        uint32_t                   loc_mmio_addr,
+        uint32_t                   ext_addr)
     {
         int count = static_cast<int>(data.size());
 
@@ -1362,6 +1457,7 @@ public:
         }
         if (pass)
             printf("  [PASS] %s (%d bytes verified)\n", name, count);
+
         return pass;
     }
 };
@@ -1376,11 +1472,17 @@ struct TestResult
     void record(bool pass)
     {
         ++total;
-        if (pass) ++passed;
-        else ++failed;
+
+        if (pass)
+            ++passed;
+        else
+            ++failed;
     }
 
-    int exit_code() const { return failed > 0 ? 1 : 0; }
+    int exit_code() const
+    {
+        return failed > 0 ? 1 : 0;
+    }
 
     void summary(const char* suite) const
     {

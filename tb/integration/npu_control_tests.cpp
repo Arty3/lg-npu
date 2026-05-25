@@ -20,7 +20,7 @@ static bool run_small_conv(NpuTb& tb, const char* label)
         13, 14, 15, 16
     };
 
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto wt = std::vector<int8_t>(9, 1);
 
     std::vector<int8_t> bias;
 
@@ -110,7 +110,7 @@ static bool test_reset_during_operation(TestResult& r)
 
     // Load data for a convolution
     auto act = std::vector<int8_t>(25, 5);  // 5x5
-    auto wt  = std::vector<int8_t>(9,  1);  // 3x3
+    auto wt = std::vector<int8_t>(9, 1);  // 3x3
 
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
@@ -191,7 +191,7 @@ static bool test_busy_done_sequencing(TestResult& r)
         13, 14, 15, 16
     };
 
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto wt = std::vector<int8_t>(9, 1);
 
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
@@ -274,26 +274,45 @@ static bool test_busy_done_sequencing(TestResult& r)
 static bool test_back_to_back(TestResult& r)
 {
     printf("[test] back_to_back\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
 
     // Command 1: 4x4x1, 3x3, all-1 weights
-    auto act1 = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
-    auto wt1  = std::vector<int8_t>(9, 1);
+    auto act1 = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
+    auto wt1 = std::vector<int8_t>(9, 1);
+
     bool p1 = tb.run_conv_test(
         "back_to_back cmd1",
-        act1, wt1, {}, 4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0);
+        act1, wt1, {},
+        4, 4, 1, 1, 3, 3,
+        1, 1, 0, 0, 0
+    );
 
     // Command 2: same size, all-2 weights -> outputs should double
     auto wt2 = std::vector<int8_t>(9, 2);
+
     bool p2 = tb.run_conv_test(
         "back_to_back cmd2",
-        act1, wt2, {}, 4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0);
+        act1, wt2, {},
+        4, 4, 1, 1, 3, 3,
+        1, 1, 0, 0, 0
+    );
 
-    bool pass = p1 && p2;
-    if (pass) printf("  [PASS] back_to_back\n");
+    const bool pass = p1 && p2;
+    if (pass)
+        printf("  [PASS] back_to_back\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -301,6 +320,7 @@ static bool test_back_to_back(TestResult& r)
 static bool test_hard_reset_clears_state(TestResult& r)
 {
     printf("[test] hard_reset_clears_state\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
@@ -312,12 +332,12 @@ static bool test_hard_reset_clears_state(TestResult& r)
     tb.reset();
 
     // After hard reset, status should be idle, IRQ enable should be 0
-    uint32_t st = tb.read_status();
-    bool idle = (st >> STATUS_IDLE_BIT) & 1;
+    const uint32_t st = tb.read_status();
+    const bool idle = ((st >> STATUS_IDLE_BIT) & 1) != 0;
     bool pass = idle;
 
     // IRQ enable should be cleared
-    uint32_t irq_en = tb.mmio_read(REG_IRQ_ENABLE);
+    const uint32_t irq_en = tb.mmio_read(REG_IRQ_ENABLE);
     if (irq_en != 0)
     {
         printf("  [FAIL] hard_reset_clears_state: IRQ_ENABLE not cleared (0x%x)\n", irq_en);
@@ -325,7 +345,7 @@ static bool test_hard_reset_clears_state(TestResult& r)
     }
 
     // CTRL should be cleared
-    uint32_t ctrl = tb.mmio_read(REG_CTRL);
+    const uint32_t ctrl = tb.mmio_read(REG_CTRL);
     if (ctrl != 0)
     {
         printf("  [FAIL] hard_reset_clears_state: CTRL not cleared (0x%x)\n", ctrl);
@@ -334,8 +354,9 @@ static bool test_hard_reset_clears_state(TestResult& r)
 
     // Perf counters: cycles counter ticks every clock, so it will be non-zero
     // by the time we read it. Active and stall should be zero (no backend work).
-    uint32_t perf_act = tb.mmio_read(REG_PERF_ACTIVE);
-    uint32_t perf_stl = tb.mmio_read(REG_PERF_STALL);
+    const uint32_t perf_act = tb.mmio_read(REG_PERF_ACTIVE);
+    const uint32_t perf_stl = tb.mmio_read(REG_PERF_STALL);
+
     if (perf_act != 0 || perf_stl != 0)
     {
         printf("  [FAIL] hard_reset_clears_state: perf active/stall not zero "
@@ -344,7 +365,8 @@ static bool test_hard_reset_clears_state(TestResult& r)
     }
 
     // IRQ_STATUS should be cleared (no pending interrupt)
-    uint32_t irq_st = tb.mmio_read(REG_IRQ_STATUS);
+    const uint32_t irq_st = tb.mmio_read(REG_IRQ_STATUS);
+
     if (irq_st != 0)
     {
         printf("  [FAIL] hard_reset_clears_state: IRQ_STATUS not cleared (0x%x)\n", irq_st);
@@ -352,9 +374,11 @@ static bool test_hard_reset_clears_state(TestResult& r)
     }
 
     // STATUS should show idle, not busy, not queue-full
-    uint32_t st2 = tb.read_status();
-    bool qfull = (st2 >> STATUS_QUEUE_FULL_BIT) & 1;
-    bool busy  = (st2 >> STATUS_BUSY_BIT) & 1;
+    const uint32_t st2 = tb.read_status();
+
+    const bool qfull = ((st2 >> STATUS_QUEUE_FULL_BIT) & 1) != 0;
+    const bool busy  = ((st2 >> STATUS_BUSY_BIT)       & 1) != 0;
+
     if (qfull || busy)
     {
         printf("  [FAIL] hard_reset_clears_state: STATUS has busy=%d qfull=%d\n",
@@ -362,8 +386,11 @@ static bool test_hard_reset_clears_state(TestResult& r)
         pass = false;
     }
 
-    if (pass) printf("  [PASS] hard_reset_clears_state\n");
+    if (pass)
+        printf("  [PASS] hard_reset_clears_state\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -373,41 +400,59 @@ static bool test_hard_reset_clears_state(TestResult& r)
 static bool test_output_writes_only_when_valid(TestResult& r)
 {
     printf("[test] output_writes_only_when_valid\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
 
     // Pre-fill output area with a sentinel value (0x55 = 85)
-    uint32_t out_addr = 2048;
-    int sentinel_count = 8;  // fill more than needed
+    constexpr uint32_t out_addr  = 2048;
+    constexpr int sentinel_count = 8;  // fill more than needed
+
     for (int i = 0; i < sentinel_count; ++i)
         tb.mmio_write(ACT_BUF_BASE + out_addr + static_cast<uint32_t>(i), 0x55);
 
     // Run a 4x4x1 k3 -> 2x2 = 4 outputs
-    auto act = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto act = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
+    auto wt = std::vector<int8_t>(9, 1);
     auto expected = ref_conv(act, wt, {}, 4, 4, 1, 1, 3, 3, 1, 1, 0, 0, 0);
-    int out_count = static_cast<int>(expected.size()); // 4
+
+    const int out_count = static_cast<int>(expected.size());  // 4
 
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
+
     // Zero-fill bias region after weights so hardware bias read returns 0
     uint32_t bias_off = static_cast<uint32_t>(wt.size());
     tb.mmio_write(WEIGHT_BUF_BASE + bias_off, 0);
     tb.load_bytes(ACT_BUF_BASE, act);
 
     ConvDesc desc{};
-    desc.opcode = 1;
+    desc.opcode       = 1;
     desc.act_out_addr = out_addr;
-    desc.bias_addr = bias_off;
-    desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-    desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-    desc.stride_h = 1; desc.stride_w = 1;
+    desc.bias_addr    = bias_off;
+    desc.in_h         = 4;
+    desc.in_w         = 4;
+    desc.in_c         = 1;
+    desc.out_k        = 1;
+    desc.filt_r       = 3;
+    desc.filt_s       = 3;
+    desc.stride_h     = 1;
+    desc.stride_w     = 1;
+
     tb.submit_conv(desc);
     tb.wait_idle();
 
     // Read back: first 4 should match expected, remaining should be sentinel
     auto got = tb.read_bytes(ACT_BUF_BASE + out_addr, sentinel_count);
     bool pass = true;
+
     for (int i = 0; i < out_count; ++i)
     {
         if (got[i] != expected[i])
@@ -426,8 +471,11 @@ static bool test_output_writes_only_when_valid(TestResult& r)
         }
     }
 
-    if (pass) printf("  [PASS] output_writes_only_when_valid\n");
+    if (pass)
+        printf("  [PASS] output_writes_only_when_valid\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -435,6 +483,7 @@ static bool test_output_writes_only_when_valid(TestResult& r)
 static bool test_irq_completion(TestResult& r)
 {
     printf("[test] irq_completion\n");
+
     NpuTb tb;
     tb.reset();
     tb.enable();
@@ -443,28 +492,42 @@ static bool test_irq_completion(TestResult& r)
     tb.mmio_write(REG_IRQ_ENABLE, 1);
 
     // IRQ should not be pending yet
-    uint32_t irq_pre = tb.mmio_read(REG_IRQ_STATUS);
+    const uint32_t irq_pre = tb.mmio_read(REG_IRQ_STATUS);
     bool pass = (irq_pre == 0);
     if (!pass)
         printf("  [FAIL] irq_completion: IRQ pending before command (0x%x)\n", irq_pre);
 
     // Run a convolution
-    auto act = std::vector<int8_t>{1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16};
-    auto wt  = std::vector<int8_t>(9, 1);
+    auto act = std::vector<int8_t>
+    {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9,  10, 11, 12,
+        13, 14, 15, 16
+    };
+
+    auto wt = std::vector<int8_t>(9, 1);
+
     tb.load_bytes(WEIGHT_BUF_BASE, wt);
     tb.load_bytes(ACT_BUF_BASE, act);
 
     ConvDesc desc{};
-    desc.opcode = 1;
+    desc.opcode       = 1;
     desc.act_out_addr = 2048;
-    desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-    desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-    desc.stride_h = 1; desc.stride_w = 1;
+    desc.in_h         = 4;
+    desc.in_w         = 4;
+    desc.in_c         = 1;
+    desc.out_k        = 1;
+    desc.filt_r       = 3;
+    desc.filt_s       = 3;
+    desc.stride_h     = 1;
+    desc.stride_w     = 1;
+
     tb.submit_conv(desc);
     tb.wait_idle();
 
     // IRQ should be pending now
-    uint32_t irq_post = tb.mmio_read(REG_IRQ_STATUS);
+    const uint32_t irq_post = tb.mmio_read(REG_IRQ_STATUS);
     if (!(irq_post & 1))
     {
         printf("  [FAIL] irq_completion: IRQ not set after completion (0x%x)\n", irq_post);
@@ -485,15 +548,19 @@ static bool test_irq_completion(TestResult& r)
     // Clear IRQ
     tb.mmio_write(REG_IRQ_CLEAR, 1);
     tb.run_clocks(2);
-    uint32_t irq_cleared = tb.mmio_read(REG_IRQ_STATUS);
+
+    const uint32_t irq_cleared = tb.mmio_read(REG_IRQ_STATUS);
     if (irq_cleared & 1)
     {
         printf("  [FAIL] irq_completion: IRQ not cleared (0x%x)\n", irq_cleared);
         pass = false;
     }
 
-    if (pass) printf("  [PASS] irq_completion\n");
+    if (pass)
+        printf("  [PASS] irq_completion\n");
+
     r.record(pass);
+
     return pass;
 }
 
@@ -510,9 +577,7 @@ static bool test_feature_id(TestResult& r)
     constexpr uint32_t EXPECTED_FID = 0x00011111;
     bool pass = (fid == EXPECTED_FID);
     if (!pass)
-    {
         printf("  [FAIL] feature_id: read 0x%08x (expected 0x%08x)\n", fid, EXPECTED_FID);
-    }
     else
     {
         // Verify individual fields
@@ -530,7 +595,7 @@ static bool test_feature_id(TestResult& r)
     return pass;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     Verilated::commandArgs(argc, argv);
     TestResult results;

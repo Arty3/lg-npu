@@ -31,7 +31,7 @@ static constexpr int ACT_BUF_BYTES    = 8192;
 static constexpr int WEIGHT_BUF_BYTES = 4096;
 
 // Compute output dimensions
-static int out_dim(int in, int pad, int filt, int stride)
+static inline int out_dim(int in, int pad, int filt, int stride)
 {
     return (in + 2 * pad - filt) / stride + 1;
 }
@@ -39,17 +39,34 @@ static int out_dim(int in, int pad, int filt, int stride)
 // Check whether a conv configuration fits in hardware buffers.
 // Returns true if input + output activations fit in ACT_BUF and
 // weights fit in WEIGHT_BUF.
-static bool fits(int H, int W, int C, int K, int R, int S,
-                 int sh, int sw, int ph, int pw)
+static bool fits(
+    int H,
+    int W,
+    int C,
+    int K,
+    int R,
+    int S,
+    int sh,
+    int sw,
+    int ph,
+    int pw)
 {
     int OH = out_dim(H, ph, R, sh);
     int OW = out_dim(W, pw, S, sw);
-    if (OH <= 0 || OW <= 0) return false;
+
+    if (OH <= 0 || OW <= 0)
+        return false;
+
     int in_bytes  = H * W * C;
     int out_bytes = OH * OW * K;
     int wt_bytes  = K * R * S * C;
-    if (in_bytes + out_bytes > ACT_BUF_BYTES) return false;
-    if (wt_bytes > WEIGHT_BUF_BYTES) return false;
+
+    if (in_bytes + out_bytes > ACT_BUF_BYTES)
+        return false;
+
+    if (wt_bytes > WEIGHT_BUF_BYTES)
+        return false;
+
     return true;
 }
 
@@ -58,7 +75,10 @@ static std::vector<int8_t> rand_fill(int count, std::mt19937& rng)
 {
     std::uniform_int_distribution<int> dist(-128, 127);
     std::vector<int8_t> v(count);
-    for (auto& x : v) x = static_cast<int8_t>(dist(rng));
+
+    for (auto& x : v)
+        x = static_cast<int8_t>(dist(rng));
+
     return v;
 }
 
@@ -70,27 +90,37 @@ static std::vector<int8_t> const_fill(int count, int8_t val)
 static std::vector<int8_t> seq_fill(int count, int8_t start = 1)
 {
     std::vector<int8_t> v(count);
+
     for (int i = 0; i < count; ++i)
         v[i] = static_cast<int8_t>((start + i) % 256);
+
     return v;
 }
 
 // Run a convolution through the harness and verify against C++ reference.
 // Automatically places output after input in the activation buffer.
 static bool run_test(
-    NpuTb& tb,
-    const char* name,
+    NpuTb&                     tb,
+    const char*                name,
     const std::vector<int8_t>& act,
     const std::vector<int8_t>& wt,
     const std::vector<int8_t>& bias,
-    int H, int W, int C, int K, int R, int S,
-    int sh, int sw, int ph, int pw,
-    int qshift,
-    uint32_t act_mode = ACT_MODE_RELU)
+    int                        H,
+    int                        W,
+    int                        C,
+    int                        K,
+    int                        R,
+    int                        S,
+    int                        sh,
+    int                        sw,
+    int                        ph,
+    int                        pw,
+    int                        qshift,
+    uint32_t                   act_mode = ACT_MODE_RELU)
 {
     int in_bytes = H * W * C;
     // Place output right after input, aligned up to next 256-byte boundary
-    uint32_t out_addr = static_cast<uint32_t>((in_bytes + 255) & ~255);
+    uint32_t out_addr  = static_cast<uint32_t>((in_bytes + 255) & ~255);
     uint32_t bias_addr = static_cast<uint32_t>(wt.size());
 
     return tb.run_conv_test(
@@ -101,7 +131,8 @@ static bool run_test(
         /*act_in_addr=*/0,
         /*wt_addr=*/0,
         /*bias_addr=*/bias_addr,
-        /*act_out_addr=*/out_addr);
+        /*act_out_addr=*/out_addr
+    );
 }
 
 // Section 1: Randomized convolution sweeps
@@ -132,7 +163,8 @@ static void run_randomized_sweeps(TestResult& r, int count, uint32_t seed)
         int sw = stride_dist(rng);
 
         // Filter must be <= input dim
-        if (R > H || S > W) continue;
+        if (R > H || S > W)
+            continue;
 
         // Random padding 0..floor(filt/2)
         std::uniform_int_distribution<int> ph_dist(0, R / 2);
@@ -143,10 +175,12 @@ static void run_randomized_sweeps(TestResult& r, int count, uint32_t seed)
         // Output dims must be positive
         int OH = out_dim(H, ph, R, sh);
         int OW = out_dim(W, pw, S, sw);
-        if (OH <= 0 || OW <= 0) continue;
+        if (OH <= 0 || OW <= 0)
+            continue;
 
         // Must fit in buffers
-        if (!fits(H, W, C, K, R, S, sh, sw, ph, pw)) continue;
+        if (!fits(H, W, C, K, R, S, sh, sw, ph, pw))
+            continue;
 
         int qshift = qshift_dist(rng);
 
@@ -181,9 +215,12 @@ static void run_randomized_sweeps(TestResult& r, int count, uint32_t seed)
         NpuTb tb(generated == 0 ? "sim/waves/full_tests.vcd" : nullptr);
         tb.reset();
         tb.enable();
-        r.record(run_test(tb, name, act, wt, bias,
-                          H, W, C, K, R, S, sh, sw, ph, pw, qshift,
-                          act_mode));
+        r.record(
+            run_test(
+                tb, name, act, wt, bias,
+                H, W, C, K, R, S, sh, sw, ph, pw, qshift,
+                act_mode
+        ));
         ++generated;
     }
 }
@@ -271,7 +308,12 @@ static void run_edge_value_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> wt = {1,-1,1, -1,1,-1, 1,-1,1};
+        std::vector<int8_t> wt =
+        {
+            1, -1, 1,
+            -1, 1, -1,
+            1, -1, 1
+        };
         r.record(run_test(tb, "alternating_wt",
                           seq_fill(5 * 5 * 1, 1), wt, {},
                           5, 5, 1, 1, 3, 3, 1, 1, 0, 0, 0));
@@ -944,10 +986,15 @@ static void run_invalid_command_tests(TestResult& r)
         tb.enable();
 
         ConvDesc desc{};
-        desc.opcode = 1;
-        desc.in_h = 0; desc.in_w = 0; desc.in_c = 0;
-        desc.out_k = 0; desc.filt_r = 0; desc.filt_s = 0;
-        desc.stride_h = 1; desc.stride_w = 1;
+        desc.opcode   = 1;
+        desc.in_h     = 0;
+        desc.in_w     = 0;
+        desc.in_c     = 0;
+        desc.out_k    = 0;
+        desc.filt_r   = 0;
+        desc.filt_s   = 0;
+        desc.stride_h = 1;
+        desc.stride_w = 1;
         uint32_t words[16];
         desc.to_words(words);
         for (int i = 0; i < 16; ++i)
@@ -1010,11 +1057,16 @@ static void run_invalid_command_tests(TestResult& r)
         tb.load_bytes(ACT_BUF_BASE, act);
 
         ConvDesc desc{};
-        desc.opcode = 1;
+        desc.opcode       = 1;
         desc.act_out_addr = 2048;
-        desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-        desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-        desc.stride_h = 1; desc.stride_w = 1;
+        desc.in_h         = 4;
+        desc.in_w         = 4;
+        desc.in_c         = 1;
+        desc.out_k        = 1;
+        desc.filt_r       = 3;
+        desc.filt_s       = 3;
+        desc.stride_h     = 1;
+        desc.stride_w     = 1;
         uint32_t words[16];
         desc.to_words(words);
         for (int i = 0; i < 16; ++i)
@@ -1041,11 +1093,11 @@ static void run_invalid_command_tests(TestResult& r)
         tb.reset();
         tb.enable();
 
-        tb.mmio_write(REG_STATUS, 0xDEADBEEF);
-        tb.mmio_write(REG_FEATURE_ID, 0xDEADBEEF);
+        tb.mmio_write(REG_STATUS,      0xDEADBEEF);
+        tb.mmio_write(REG_FEATURE_ID,  0xDEADBEEF);
         tb.mmio_write(REG_PERF_CYCLES, 0xDEADBEEF);
         tb.mmio_write(REG_PERF_ACTIVE, 0xDEADBEEF);
-        tb.mmio_write(REG_PERF_STALL, 0xDEADBEEF);
+        tb.mmio_write(REG_PERF_STALL,  0xDEADBEEF);
 
         // Should still be alive and idle
         bool pass = tb.is_idle();
@@ -1069,7 +1121,9 @@ static void run_invalid_command_tests(TestResult& r)
                                     1, 1, 0, 0, 0);
         }
 
-        if (pass) printf("  [PASS] ro_write_harmless\n");
+        if (pass)
+            printf("  [PASS] ro_write_harmless\n");
+
         r.record(pass);
     }
 
@@ -1553,7 +1607,8 @@ static void run_vec_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> a = {10}, b = {20};
+        std::vector<int8_t> a = {10};
+        std::vector<int8_t> b = {20};
         r.record(tb.run_vec_test("vec add single", a, b, 1, 0));
     }
 
@@ -1562,7 +1617,8 @@ static void run_vec_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> a = {1, 2, 3, 4}, b = {5, 6, 7, 8};
+        std::vector<int8_t> a = {1, 2, 3, 4};
+        std::vector<int8_t> b = {5, 6, 7, 8};
         r.record(tb.run_vec_test("vec add 4-elem", a, b, 4, 0));
     }
 
@@ -1571,7 +1627,8 @@ static void run_vec_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> a = {100, 127}, b = {100, 127};
+        std::vector<int8_t> a = {100, 127};
+        std::vector<int8_t> b = {100, 127};
         r.record(tb.run_vec_test("vec add sat-pos", a, b, 2, 0));
     }
 
@@ -1580,7 +1637,8 @@ static void run_vec_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> a = {-100, -128}, b = {-100, -128};
+        std::vector<int8_t> a = {-100, -128};
+        std::vector<int8_t> b = {-100, -128};
         r.record(tb.run_vec_test("vec add sat-neg", a, b, 2, 0));
     }
 
@@ -1589,7 +1647,8 @@ static void run_vec_tests(TestResult& r)
         NpuTb tb;
         tb.reset();
         tb.enable();
-        std::vector<int8_t> a = {3, -2, 5, 0}, b = {4, 7, -3, 10};
+        std::vector<int8_t> a = {3, -2, 5, 0};
+        std::vector<int8_t> b = {4, 7, -3, 10};
         r.record(tb.run_vec_test("vec mul no-shift", a, b, 4, 1, 0));
     }
 
@@ -1609,7 +1668,7 @@ static void run_vec_tests(TestResult& r)
         tb.reset();
         tb.enable();
         std::vector<int8_t> a = {10, -10, 5, -5};
-        std::vector<int8_t> b = {3,   3, -4, -4};
+        std::vector<int8_t> b = {3, 3, -4, -4};
         r.record(tb.run_vec_test("vec mul relu", a, b, 4, 1, 0, ACT_MODE_RELU));
     }
 
@@ -1619,7 +1678,7 @@ static void run_vec_tests(TestResult& r)
         tb.reset();
         tb.enable();
         std::vector<int8_t> a = {10, -10, 5, -5};
-        std::vector<int8_t> b = {3,   3, -4, -4};
+        std::vector<int8_t> b = {3, 3, -4, -4};
         r.record(tb.run_vec_test("vec mul leaky", a, b, 4, 1, 0, ACT_MODE_LEAKY_RELU));
     }
 
@@ -1652,7 +1711,8 @@ static void run_vec_tests(TestResult& r)
         tb.enable();
 
         // First: vec add 4
-        std::vector<int8_t> va = {1, 2, 3, 4}, vb = {5, 6, 7, 8};
+        std::vector<int8_t> va = {1, 2, 3, 4};
+        std::vector<int8_t> vb = {5, 6, 7, 8};
         bool vec_ok = tb.run_vec_test("vec-then-conv (vec)", va, vb, 4, 0);
 
         // Second: conv 4x4x1 k3
@@ -1756,12 +1816,18 @@ static void run_dma_tests(TestResult& r)
             desc.act_out_addr = 2048;
             desc.weight_addr  = 0;
             desc.bias_addr    = bias_addr;
-            desc.in_h = 4; desc.in_w = 4; desc.in_c = 1;
-            desc.out_k = 1; desc.filt_r = 3; desc.filt_s = 3;
-            desc.stride_h = 1; desc.stride_w = 1;
-            desc.pad_h = 0; desc.pad_w = 0;
-            desc.quant_shift = 0;
-            desc.act_mode = ACT_MODE_RELU;
+            desc.in_h         = 4;
+            desc.in_w         = 4;
+            desc.in_c         = 1;
+            desc.out_k        = 1;
+            desc.filt_r       = 3;
+            desc.filt_s       = 3;
+            desc.stride_h     = 1;
+            desc.stride_w     = 1;
+            desc.pad_h        = 0;
+            desc.pad_w        = 0;
+            desc.quant_shift  = 0;
+            desc.act_mode     = ACT_MODE_RELU;
             tb.submit_conv(desc);
 
             if (!tb.wait_idle())
@@ -1807,9 +1873,7 @@ static void run_dma_tests(TestResult& r)
                                         4, 4, 1, 1, 3, 3,
                                         1, 1, 0, 0, 0);
         if (!conv_ok)
-        {
             r.record(false);
-        }
         else
         {
             // DMA the output (2x2 = 4 bytes at act_out_addr=2048) to ext
@@ -1936,7 +2000,7 @@ static void run_dma_tests(TestResult& r)
     }
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     Verilated::commandArgs(argc, argv);
     TestResult r;
