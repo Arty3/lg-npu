@@ -29,7 +29,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y verilator yosys sv2v gcc make
+          sudo apt-get install -y verilator yosys gcc make git haskell-stack
+
+      - name: Install sv2v
+        run: |
+          git clone --depth 1 https://github.com/zachjs/sv2v.git /tmp/sv2v
+          cd /tmp/sv2v
+          stack --no-terminal install --local-bin-path /usr/local/bin
+          sv2v --numeric-version
 
       - name: Install netlistsvg
         run: npm install -g netlistsvg
