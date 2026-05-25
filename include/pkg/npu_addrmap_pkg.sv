@@ -47,7 +47,6 @@ package npu_addrmap_pkg;
     localparam int DMA_CTRL_DIR_BIT     = 1;
 
     /* verilator lint_off UNUSEDPARAM */
-
     // DMA status register bit fields
     localparam int DMA_STATUS_BUSY_BIT  = 0;
     /* verilator lint_on UNUSEDPARAM */
