@@ -1,6 +1,7 @@
 // ============================================================================
 // pipeline_reg.sv - Single pipeline register stage with valid/ready
 // ============================================================================
+
 module pipeline_reg #(
     parameter int DATA_W = 32
 ) (
