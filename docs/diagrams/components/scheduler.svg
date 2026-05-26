@@ -19,153 +19,172 @@
   .splitjoinBody {
     fill:#000;
   }</style>
-  <g s:type="not" transform="translate(411.5,781)" s:width="30" s:height="20" id="cell_$eq$/tmp/tmpa_nkpz2f.v:5522$1409">
+  <g s:type="not" transform="translate(411.5,781)" s:width="30" s:height="20" id="cell_$eq$/tmp/tmp40d56njm.v:5494$1406">
     <s:alias val="$_NOT_"/>
     <s:alias val="$not"/>
     <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5522$1409"/>
-    <circle cx="23" cy="10" r="3" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5522$1409"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$eq$/tmp/tmp40d56njm.v:5494$1406"/>
+    <circle cx="23" cy="10" r="3" class="cell_$eq$/tmp/tmp40d56njm.v:5494$1406"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="25" s:y="10" s:pid="Y"/>
   </g>
-  <g s:type="eq" transform="translate(409.3333333333333,29.5)" s:width="25" s:height="25" id="cell_$eq$/tmp/tmpa_nkpz2f.v:5524$1410">
+  <g s:type="eq" transform="translate(409.3333333333333,29.5)" s:width="25" s:height="25" id="cell_$eq$/tmp/tmp40d56njm.v:5496$1407">
     <s:alias val="$eq"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5524$1410"/>
-    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5524$1410"/>
-    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5524$1410"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$eq$/tmp/tmp40d56njm.v:5496$1407"/>
+    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$eq$/tmp/tmp40d56njm.v:5496$1407"/>
+    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$eq$/tmp/tmp40d56njm.v:5496$1407"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="not" transform="translate(310,989)" s:width="30" s:height="20" id="cell_$eq$/tmp/tmpa_nkpz2f.v:5550$1416">
+  <g s:type="not" transform="translate(310,989)" s:width="30" s:height="20" id="cell_$eq$/tmp/tmp40d56njm.v:5522$1413">
     <s:alias val="$_NOT_"/>
     <s:alias val="$not"/>
     <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5550$1416"/>
-    <circle cx="23" cy="10" r="3" class="cell_$eq$/tmp/tmpa_nkpz2f.v:5550$1416"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$eq$/tmp/tmp40d56njm.v:5522$1413"/>
+    <circle cx="23" cy="10" r="3" class="cell_$eq$/tmp/tmp40d56njm.v:5522$1413"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="25" s:y="10" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(407.6666666666667,994)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmpa_nkpz2f.v:5550$1417">
+  <g s:type="and" transform="translate(407.6666666666667,994)" s:width="30" s:height="25" id="cell_$logic_and$/tmp/tmp40d56njm.v:5522$1414">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmpa_nkpz2f.v:5550$1417"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$logic_and$/tmp/tmp40d56njm.v:5522$1414"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="generic" transform="translate(400,831)" s:width="30" s:height="40" id="cell_$procdff$1646">
-    <text x="15" y="-4" class="nodelabel cell_$procdff$1646" s:attribute="ref">$adff</text>
-    <rect width="30" height="60" s:generic="body" class="cell_$procdff$1646"/>
-    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1646~ARST">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1646">ARST</text>
+  <g s:type="generic" transform="translate(400,831)" s:width="30" s:height="40" id="cell_$procdff$1643">
+    <text x="15" y="-4" class="nodelabel cell_$procdff$1643" s:attribute="ref">$adff</text>
+    <rect width="30" height="60" s:generic="body" class="cell_$procdff$1643"/>
+    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1643~ARST">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1643">ARST</text>
     </g>
-    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1646~CLK">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1646">CLK</text>
+    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1643~CLK">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1643">CLK</text>
     </g>
-    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1646~D">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1646">D</text>
+    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1643~D">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1643">D</text>
     </g>
-    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$procdff$1646~Q">
-      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$procdff$1646">Q</text>
-    </g>
-  </g>
-  <g s:type="generic" transform="translate(107,488)" s:width="30" s:height="40" id="cell_$procdff$1647">
-    <text x="15" y="-4" class="nodelabel cell_$procdff$1647" s:attribute="ref">$adff</text>
-    <rect width="30" height="60" s:generic="body" class="cell_$procdff$1647"/>
-    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1647~ARST">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1647">ARST</text>
-    </g>
-    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1647~CLK">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1647">CLK</text>
-    </g>
-    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1647~D">
-      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1647">D</text>
-    </g>
-    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$procdff$1647~Q">
-      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$procdff$1647">Q</text>
+    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$procdff$1643~Q">
+      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$procdff$1643">Q</text>
     </g>
   </g>
-  <g s:type="mux" transform="translate(513,919)" s:width="20" s:height="40" id="cell_$procmux$1618">
+  <g s:type="generic" transform="translate(107,488)" s:width="30" s:height="40" id="cell_$procdff$1644">
+    <text x="15" y="-4" class="nodelabel cell_$procdff$1644" s:attribute="ref">$adff</text>
+    <rect width="30" height="60" s:generic="body" class="cell_$procdff$1644"/>
+    <g transform="translate(0,10)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1644~ARST">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1644">ARST</text>
+    </g>
+    <g transform="translate(0,30)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1644~CLK">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1644">CLK</text>
+    </g>
+    <g transform="translate(0,50)" s:x="0" s:y="10" s:pid="in0" id="port_$procdff$1644~D">
+      <text x="-3" y="-4" class="inputPortLabel cell_$procdff$1644">D</text>
+    </g>
+    <g transform="translate(30,10)" s:x="30" s:y="10" s:pid="out0" id="port_$procdff$1644~Q">
+      <text x="5" y="-4" style="fill:#000; stroke:none" class="cell_$procdff$1644">Q</text>
+    </g>
+  </g>
+  <g s:type="mux" transform="translate(513,919)" s:width="20" s:height="40" id="cell_$procmux$1615">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1618"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1615"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(248.33333333333334,118)" s:width="20" s:height="40" id="cell_$procmux$1622">
+  <g s:type="mux" transform="translate(248.33333333333334,118)" s:width="20" s:height="40" id="cell_$procmux$1619">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1622"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1619"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(313.3333333333333,108)" s:width="20" s:height="40" id="cell_$procmux$1624">
+  <g s:type="mux" transform="translate(313.3333333333333,108)" s:width="20" s:height="40" id="cell_$procmux$1621">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1624"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1621"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="eq" transform="translate(246.66666666666666,178)" s:width="25" s:height="25" id="cell_$procmux$1625_CMP0">
+  <g s:type="eq" transform="translate(246.66666666666666,178)" s:width="25" s:height="25" id="cell_$procmux$1622_CMP0">
     <s:alias val="$eq"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1625_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1625_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1625_CMP0"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1622_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1622_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1622_CMP0"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(248.33333333333334,273)" s:width="20" s:height="40" id="cell_$procmux$1629">
+  <g s:type="mux" transform="translate(248.33333333333334,273)" s:width="20" s:height="40" id="cell_$procmux$1626">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1629"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1626"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(313.3333333333333,228)" s:width="20" s:height="40" id="cell_$procmux$1631">
+  <g s:type="mux" transform="translate(313.3333333333333,228)" s:width="20" s:height="40" id="cell_$procmux$1628">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1631"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1628"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="eq" transform="translate(246.66666666666666,413)" s:width="25" s:height="25" id="cell_$procmux$1632_CMP0">
+  <g s:type="eq" transform="translate(246.66666666666666,413)" s:width="25" s:height="25" id="cell_$procmux$1629_CMP0">
     <s:alias val="$eq"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1632_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1632_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1632_CMP0"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1629_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1629_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1629_CMP0"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(248.33333333333334,488.5)" s:width="20" s:height="40" id="cell_$procmux$1637">
+  <g s:type="mux" transform="translate(248.33333333333334,488.5)" s:width="20" s:height="40" id="cell_$procmux$1634">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1637"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1634"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="0" s:y="30" s:pid="B"/>
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="mux" transform="translate(313.3333333333333,478.5)" s:width="20" s:height="40" id="cell_$procmux$1639">
+  <g s:type="mux" transform="translate(313.3333333333333,478.5)" s:width="20" s:height="40" id="cell_$procmux$1636">
+    <s:alias val="$pmux"/>
+    <s:alias val="$mux"/>
+    <s:alias val="$_MUX_"/>
+    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1636"/>
+    <g s:x="0" s:y="10" s:pid="A"/>
+    <g s:x="0" s:y="30" s:pid="B"/>
+    <g s:x="10" s:y="35" s:pid="S"/>
+    <g s:x="20" s:y="20" s:pid="Y"/>
+  </g>
+  <g s:type="not" transform="translate(245,616)" s:width="30" s:height="20" id="cell_$procmux$1637_CMP0">
+    <s:alias val="$_NOT_"/>
+    <s:alias val="$not"/>
+    <s:alias val="$logic_not"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$procmux$1637_CMP0"/>
+    <circle cx="23" cy="10" r="3" class="cell_$procmux$1637_CMP0"/>
+    <g s:x="0" s:y="10" s:pid="A"/>
+    <g s:x="25" s:y="10" s:pid="Y"/>
+  </g>
+  <g s:type="mux" transform="translate(513,87)" s:width="20" s:height="40" id="cell_$procmux$1639">
     <s:alias val="$pmux"/>
     <s:alias val="$mux"/>
     <s:alias val="$_MUX_"/>
@@ -175,49 +194,30 @@
     <g s:x="10" s:y="35" s:pid="S"/>
     <g s:x="20" s:y="20" s:pid="Y"/>
   </g>
-  <g s:type="not" transform="translate(245,616)" s:width="30" s:height="20" id="cell_$procmux$1640_CMP0">
-    <s:alias val="$_NOT_"/>
-    <s:alias val="$not"/>
-    <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$procmux$1640_CMP0"/>
-    <circle cx="23" cy="10" r="3" class="cell_$procmux$1640_CMP0"/>
-    <g s:x="0" s:y="10" s:pid="A"/>
-    <g s:x="25" s:y="10" s:pid="Y"/>
-  </g>
-  <g s:type="mux" transform="translate(513,87)" s:width="20" s:height="40" id="cell_$procmux$1642">
-    <s:alias val="$pmux"/>
-    <s:alias val="$mux"/>
-    <s:alias val="$_MUX_"/>
-    <path d="M0,0 L20,10 L20,30 L0,40 Z" class="cell_$procmux$1642"/>
-    <g s:x="0" s:y="10" s:pid="A"/>
-    <g s:x="0" s:y="30" s:pid="B"/>
-    <g s:x="10" s:y="35" s:pid="S"/>
-    <g s:x="20" s:y="20" s:pid="Y"/>
-  </g>
-  <g s:type="eq" transform="translate(311.6666666666667,641)" s:width="25" s:height="25" id="cell_$procmux$1643_CMP0">
+  <g s:type="eq" transform="translate(311.6666666666667,641)" s:width="25" s:height="25" id="cell_$procmux$1640_CMP0">
     <s:alias val="$eq"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1643_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1643_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1643_CMP0"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1640_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1640_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1640_CMP0"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="eq" transform="translate(311.6666666666667,701)" s:width="25" s:height="25" id="cell_$procmux$1644_CMP0">
+  <g s:type="eq" transform="translate(311.6666666666667,701)" s:width="25" s:height="25" id="cell_$procmux$1641_CMP0">
     <s:alias val="$eq"/>
-    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1644_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1644_CMP0"/>
-    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1644_CMP0"/>
+    <circle r="12.5" cx="12.5" cy="12.5" class="cell_$procmux$1641_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="10" y2="10" class="cell_$procmux$1641_CMP0"/>
+    <line x1="7.5" x2="17.5" y1="15" y2="15" class="cell_$procmux$1641_CMP0"/>
     <g s:x="3" s:y="5" s:pid="A"/>
     <g s:x="3" s:y="20" s:pid="B"/>
     <g s:x="25" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="not" transform="translate(310,761)" s:width="30" s:height="20" id="cell_$procmux$1645_CMP0">
+  <g s:type="not" transform="translate(310,761)" s:width="30" s:height="20" id="cell_$procmux$1642_CMP0">
     <s:alias val="$_NOT_"/>
     <s:alias val="$not"/>
     <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$procmux$1645_CMP0"/>
-    <circle cx="23" cy="10" r="3" class="cell_$procmux$1645_CMP0"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$procmux$1642_CMP0"/>
+    <circle cx="23" cy="10" r="3" class="cell_$procmux$1642_CMP0"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="25" s:y="10" s:pid="Y"/>
   </g>
