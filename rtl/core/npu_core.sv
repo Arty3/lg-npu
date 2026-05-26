@@ -480,19 +480,36 @@ module npu_core
     assign backend_stall  = be_busy & has_outstanding_request & ~be_act_rd_gnt;
 
 `ifdef SIMULATION
-    logic act_rd_outstanding_r;
+    // Counts outstanding activation reads so the assertion scales as the
+    // memory subsystem learns to pipeline multiple in-flight requests.
+    localparam int OUTSTANDING_W = 4;
+    logic [OUTSTANDING_W-1:0] act_rd_outstanding_r;
     always_ff @(posedge clk or negedge rst_n)
     begin
         if (!rst_n)
-            act_rd_outstanding_r <= 1'b0;
+            act_rd_outstanding_r <= '0;
         else begin
-            if (be_act_rd_req && be_act_rd_gnt)
-                act_rd_outstanding_r <= 1'b1;
-            if (be_act_rd_rvalid)
-                act_rd_outstanding_r <= 1'b0;
+            unique case ({be_act_rd_req && be_act_rd_gnt, be_act_rd_rvalid})
+                2'b10:   act_rd_outstanding_r <= act_rd_outstanding_r + 1'b1;
+                2'b01:   act_rd_outstanding_r <= act_rd_outstanding_r - 1'b1;
+                default: act_rd_outstanding_r <= act_rd_outstanding_r;
+            endcase
 
-            assert (!(be_act_rd_rvalid && !act_rd_outstanding_r));
+            assert (!(be_act_rd_rvalid && act_rd_outstanding_r == '0))
+                else $error("npu_core: rvalid with no outstanding request");
+            assert (act_rd_outstanding_r != {OUTSTANDING_W{1'b1}})
+                else $error("npu_core: outstanding-read counter saturated");
         end
+    end
+
+    // Only one backend should be busy under the in-order scheduler.
+    // Becomes a real check once dispatch starts issuing out-of-order.
+    always_ff @(posedge clk)
+    begin
+        if (rst_n)
+            assert ($onehot0({gemm_busy, smax_busy, conv_busy,
+                              vec_busy, lnorm_busy, pool_busy}))
+                else $error("npu_core: multiple backends busy simultaneously");
     end
 `endif
 

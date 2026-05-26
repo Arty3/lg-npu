@@ -180,4 +180,40 @@ module conv_addr_gen
         end
     end
 
+    /*
+     * Silent-truncation guards. The ADDR_W'(...) casts in S_STAGE2 narrow
+     * 32-bit intermediate index products down to ADDR_W bits. As long as
+     * actual feature maps fit in ADDR_W (=16) addresses these never fire,
+     * but they will catch overflow if the design ever scales up.
+     */
+`ifdef SIMULATION
+    property p_act_idx_no_overflow;
+        @(posedge clk) disable iff (!rst_n)
+            (state == S_STAGE2) |->
+            ((act_m2_s2 + {16'b0, c_s2}) < (32'h1 << ADDR_W));
+    endproperty
+    a_act_idx_no_overflow: assert property (p_act_idx_no_overflow)
+        else $error("conv_addr_gen: act index overflows ADDR_W");
+
+    property p_wt_idx_no_overflow;
+        @(posedge clk) disable iff (!rst_n)
+            (state == S_STAGE2) |->
+            (((wt_m2_s2 + {16'b0, s_s2}) * {16'b0, in_c_s2}
+                + {16'b0, c_s2}) < (32'h1 << ADDR_W));
+    endproperty
+    a_wt_idx_no_overflow: assert property (p_wt_idx_no_overflow)
+        else $error("conv_addr_gen: wt index overflows ADDR_W");
+`endif
+
+    /*
+     * NOTE (future scale-up): the FSM above keeps one transaction in flight
+     * at a time (5 cycles/address). For a >1 PE array this becomes the
+     * bottleneck. A true pipelined refactor (per-stage valid bits,
+     * in_ready = ~out_v || out_ready) must be paired with a matching
+     * metadata pipeline in conv_backend (last_inner_iter_r,
+     * acc_clr_iter_r, wr_addr_iter_r) -- otherwise iter_accepts fire every
+     * cycle while load_accepts trickle out, overwriting the single set of
+     * metadata regs before the loader consumes them.
+     */
+
 endmodule : conv_addr_gen

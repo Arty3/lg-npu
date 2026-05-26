@@ -190,18 +190,37 @@ module conv_backend
     logic last_inner_d;
     logic [ADDR_W-1:0] wr_addr_d;
 
+    // Output write address is computed incrementally instead of via a
+    // multiply chain on (oh, ow, k). Loop order (outer k -> ow -> oh,
+    // inner r -> s -> c) produces contiguous output addressing: every
+    // last_inner event advances exactly one output element, so the
+    // write address always increments by 1 (the wraparound of k inside
+    // ow and of ow inside oh maps onto +1 in linear address space).
+    logic first_last_inner_seen_r;
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            last_inner_iter_r <= 1'b0;
-            acc_clr_iter_r    <= 1'b0;
-            wr_addr_iter_r    <= '0;
-            bias_addr_iter_r  <= '0;
-        end else if (iter_accept) begin
-            last_inner_iter_r <= last_inner;
-            acc_clr_iter_r    <= acc_clr;
-            if (last_inner) begin
-                wr_addr_iter_r   <= out_base + ADDR_W'(((oh * out_w) + ow) * out_k + k);
-                bias_addr_iter_r <= bias_base + ADDR_W'(k);
+            last_inner_iter_r       <= 1'b0;
+            acc_clr_iter_r          <= 1'b0;
+            wr_addr_iter_r          <= '0;
+            bias_addr_iter_r        <= '0;
+            first_last_inner_seen_r <= 1'b0;
+        end else begin
+            if (cmd_valid & cmd_ready)
+                first_last_inner_seen_r <= 1'b0;
+
+            if (iter_accept) begin
+                last_inner_iter_r <= last_inner;
+                acc_clr_iter_r    <= acc_clr;
+                if (last_inner) begin
+                    if (!first_last_inner_seen_r) begin
+                        wr_addr_iter_r          <= out_base;
+                        first_last_inner_seen_r <= 1'b1;
+                    end else begin
+                        wr_addr_iter_r          <= wr_addr_iter_r + ADDR_W'(1);
+                    end
+                    bias_addr_iter_r <= bias_base + ADDR_W'(k);
+                end
             end
         end
     end

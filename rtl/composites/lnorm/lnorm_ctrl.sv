@@ -146,16 +146,31 @@ module lnorm_ctrl
     logic signed [31:0] diff_w;
     /* verilator lint_on UNUSEDSIGNAL */
     logic [31:0]        abs_diff_w;
-    logic [63:0]        abs_diff_sq_w;
+    /* abs_diff_w fits in well under 16 bits: act_rd_rdata is 8-bit signed
+     * and mean_r is in the same scale, so the product is at most a 16-bit
+     * value (~9 bits of real range squared). Narrow the multiplier inputs
+     * so synthesis does not infer a 64x64 multiplier. */
+    logic [15:0]        abs_diff_narrow_w;
+    logic [31:0]        abs_diff_sq_w;
     logic [39:0]        wide_scaled_w;
     logic [31:0]        scaled_abs_w;
 
-    assign diff_w        = {{24{act_rd_rdata[DATA_W-1]}}, act_rd_rdata} - mean_r;
-    assign abs_diff_w    = diff_w[31] ? -diff_w : diff_w;
-    assign abs_diff_sq_w = {32'b0, abs_diff_w} * {32'b0, abs_diff_w};
-    assign wide_scaled_w = {8'b0, abs_diff_w} << norm_shift_r;
-    assign scaled_abs_w  = (|wide_scaled_w[39:32]) ? 32'hFFFF_FFFF
-                                                   : wide_scaled_w[31:0];
+    assign diff_w            = {{24{act_rd_rdata[DATA_W-1]}}, act_rd_rdata} - mean_r;
+    assign abs_diff_w        = diff_w[31] ? -diff_w : diff_w;
+    assign abs_diff_narrow_w = abs_diff_w[15:0];
+    assign abs_diff_sq_w     = {16'b0, abs_diff_narrow_w} * {16'b0, abs_diff_narrow_w};
+    assign wide_scaled_w     = {8'b0, abs_diff_w} << norm_shift_r;
+    assign scaled_abs_w      = (|wide_scaled_w[39:32]) ? 32'hFFFF_FFFF
+                                                       : wide_scaled_w[31:0];
+
+`ifdef SIMULATION
+    /* Guard against feeding the narrowed multiplier an out-of-range value. */
+    always_ff @(posedge clk) begin
+        if (rst_n)
+            assert (abs_diff_w[31:16] == 16'b0)
+                else $error("lnorm_ctrl: abs_diff_w upper bits non-zero, narrowing unsafe");
+    end
+`endif
 
     // Norm pass: clamped output from divider result
     logic [DATA_W-1:0] norm_result;
@@ -332,7 +347,7 @@ module lnorm_ctrl
             var_sum_r <= '0;
         else if (state == S_VAR_WAIT && act_rd_rvalid)
         begin
-            var_sum_r <= var_sum_r + abs_diff_sq_w[31:0];
+            var_sum_r <= var_sum_r + abs_diff_sq_w;
         end
     end
 
@@ -376,7 +391,7 @@ module lnorm_ctrl
                     begin
                         logic [31:0] final_var;
                         logic [63:0] final_var_wide;
-                        final_var_wide = {32'b0, var_sum_r} + abs_diff_sq_w;
+                        final_var_wide = {32'b0, var_sum_r} + {32'b0, abs_diff_sq_w};
                         final_var = |final_var_wide[63:32] ? 32'hFFFF_FFFF : final_var_wide[31:0];
                         div_sign_r  <= 1'b0;
                         div_quot_r  <= final_var;
