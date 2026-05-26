@@ -21,13 +21,10 @@ This document covers setting up and running RTL simulation for the lg-npu.
 # 1. Lint check (no compilation)
 make lint
 
-# 2. Generate test vectors
-make vectors
-
-# 3. Run smoke regression (control + perf)
+# 2. Run smoke regression (control + perf)
 make sim-smoke
 
-# 4. Run full regression
+# 3. Run full regression
 make sim-full
 ```
 
@@ -43,7 +40,6 @@ make sim-full
 | `make sim-full-tests` | Run full regression suite |
 | `make sim-smoke` | Run control + perf smoke suites |
 | `make sim-full` | Run smoke + full regression |
-| `make vectors` | Generate test vectors from Python reference models |
 | `make waves` | Open the latest VCD waveform in Surfer viewer |
 | `make viz` | Generate architecture diagrams into `docs/diagrams/` |
 
@@ -80,21 +76,6 @@ Each Makefile test target performs these steps:
 The RTL compilation order is defined in [tools/lint/rtl.f](../../tools/lint/rtl.f).
 This file lists all packages, common modules, and design hierarchy in
 dependency order. Both lint and simulation share the same file list.
-
----
-
-## Test Vectors
-
-Reference vectors are generated from Python models:
-
-```bash
-make vectors
-```
-
-This runs `model/vectors/gen_conv_vectors.py`, placing output files in
-`tb/vectors/`.
-Testbenches load these vectors to compare RTL output against the golden
-reference.
 
 ---
 

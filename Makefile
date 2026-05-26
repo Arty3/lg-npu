@@ -5,7 +5,6 @@ FILELIST       := tools/lint/rtl.f
 TOP            := npu_shell
 SIM_BUILD      := sim/build
 SYNTH_BUILD    := syn/build
-VEC_DIR        := tb/vectors
 WAVE_DIR       := sim/waves
 
 VERILATOR      := verilator
@@ -101,10 +100,6 @@ sim-full-tests: compile-full-tests $(WAVE_DIR) ## Run full regression suite
 sim-full: sim-smoke sim-full-tests ## Run complete regression (smoke + full)
 	@echo ""
 	@echo "=== sim-full: ALL SUITES PASSED ==="
-
-.PHONY: vectors
-vectors: ## Generate test vectors from Python reference models
-	$(PYTHON) model/vectors/gen_conv_vectors.py  --out-dir $(VEC_DIR)
 
 .PHONY: format
 format: ## Run code formatter on RTL and scripts
