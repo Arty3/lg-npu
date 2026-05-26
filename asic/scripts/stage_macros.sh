@@ -42,6 +42,16 @@ for macro in ${SRAM_MACROS}; do
             continue
         fi
         cp -f "${src}" "${dst}"
+        # OpenROAD STA cannot parse the OpenRAM behavioural model; mark the
+        # Verilog view as a blackbox so STA relies on the .lib for timing.
+        if [[ "${ext}" == "v" ]]; then
+            if ! head -n 1 "${dst}" | grep -q '^/// sta-blackbox'; then
+                tmp="$(mktemp)"
+                printf '/// sta-blackbox\n' > "${tmp}"
+                cat "${dst}" >> "${tmp}"
+                mv "${tmp}" "${dst}"
+            fi
+        fi
     done
 
     lib_src="${src_dir}/${macro}_${SRAM_LIB_CORNER}.lib"
