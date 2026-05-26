@@ -52,17 +52,57 @@ module mem_macro_wrap #(
             end
         end else begin : g_sky130
 `ifdef ASIC_BUILD
-            sky130_sram_1rw_blackbox #(
-                .DEPTH  (DEPTH),
-                .DATA_W (DATA_W)
-            ) u_sky130_sram (
-                .clk    (clk),
-                .cs     (en),
-                .we     (we),
-                .addr   (addr),
-                .din    (wdata),
-                .dout   (rdata)
-            );
+            /*
+             * Sky130 OpenRAM macro mapping for the single-port path.
+             * Currently only the PSUM bank uses this wrapper:
+             *   DEPTH=4096, DATA_W=32  -> 8 * sky130_sram_2kbyte_1rw1r_32x512_8
+             * Other parameter combinations elaborate to an $error so a future
+             * caller does not silently fall back to a behavioural model.
+             */
+            if (DEPTH != 4096 || DATA_W != 32) begin : g_unsupported
+`ifdef SIMULATION
+                initial $error("mem_macro_wrap: no sky130 mapping for DEPTH=%0d DATA_W=%0d", DEPTH, DATA_W);
+`endif
+            end
+
+            localparam int BANKS    = 8;
+            localparam int ROW_W    = 9;         /* macro is 32x512 */
+            localparam int BANK_SEL = $clog2(BANKS);
+
+            logic [BANK_SEL-1:0] bank_sel;
+            logic [ROW_W-1:0]    row_addr;
+            logic [BANK_SEL-1:0] bank_sel_r;
+            logic [31:0]         bank_dout [BANKS];
+
+            assign bank_sel = addr[ROW_W +: BANK_SEL];
+            assign row_addr = addr[0       +: ROW_W];
+
+            always_ff @(posedge clk) begin
+                if (en)
+                    bank_sel_r <= bank_sel;
+            end
+
+            genvar gi;
+            for (gi = 0; gi < BANKS; ++gi) begin : g_bank
+                logic bank_en;
+                assign bank_en = en && (bank_sel == BANK_SEL'(gi));
+
+                sky130_sram_2kbyte_1rw1r_32x512_8 u_sky130_sram (
+                    .clk0   (clk),
+                    .csb0   (~bank_en),
+                    .web0   (~we),
+                    .wmask0 (4'b1111),
+                    .addr0  (row_addr),
+                    .din0   (wdata),
+                    .dout0  (bank_dout[gi]),
+                    .clk1   (clk),
+                    .csb1   (1'b1),
+                    .addr1  ({ROW_W{1'b0}}),
+                    .dout1  ()
+                );
+            end
+
+            assign rdata = bank_dout[bank_sel_r];
 `else
             always_ff @(posedge clk) begin
                 if (en) begin

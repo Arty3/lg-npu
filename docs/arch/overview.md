@@ -13,7 +13,7 @@ as possible:
 | Tensor layout | A single canonical layout (NHWC). All tensors in memory use this ordering. |
 | Command interface | Six opcodes (`CONV`, `GEMM`, `SOFTMAX`, `VEC`, `LNORM`, `POOL`). Software submits a descriptor that fully describes a single convolution tile, matrix multiply, softmax, vector operation, layer normalisation, or pooling window. |
 | Memory | Local on-chip SRAM (weight buffer, activation buffer, partial-sum buffer) with a register-driven DMA engine for bulk transfers between external memory and local buffers. Software may also pre-load buffers over MMIO. |
-| Platform | Simulation-only. No FPGA or ASIC bring-up. |
+| Platform | RTL is simulation-clean and synthesises through the OpenLane2 / sky130A flow (100 MHz, `sky130_fd_sc_hd`, 4 KB / 8 KB / 16 KB OpenRAM SRAMs). See `docs/bringup/asic_bringup.md`. |
 
 These constraints mean the first passing test is: software writes INT8 weights
 and activations into the local buffers over MMIO, posts a single `CONV` or

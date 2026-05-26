@@ -79,6 +79,7 @@ up on real hardware.
 |-----|-------------|
 | `sim_bringup.md` | Instructions for running simulations and verification environments. |
 | `fpga_bringup.md` | Steps required to build and run the design on an FPGA platform. |
+| `asic_bringup.md` | OpenLane2 / sky130A flow for taking `npu_shell` from RTL to GDSII. |
 
 ---
 

@@ -102,12 +102,14 @@ module npu_dma_frontend
     assign dma_done = rd_done | wr_done;
 
     // Current frontend contract is single-direction DMA at a time.
+`ifdef SIMULATION
     always_ff @(posedge clk or negedge rst_n)
     begin
         if (rst_n) begin
             assert (!(rd_busy && wr_busy));
         end
     end
+`endif
 
     // External memory port mux
     assign ext_mem_addr  = rd_busy ? rd_ext_addr  : wr_ext_addr;

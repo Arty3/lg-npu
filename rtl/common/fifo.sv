@@ -26,10 +26,12 @@ module fifo #(
 
     localparam int PTR_W = $clog2(DEPTH);
 
+`ifdef SIMULATION
     initial begin
         if (DEPTH != (1 << PTR_W))
             $fatal(1, "fifo DEPTH must be power-of-two, got %0d", DEPTH);
     end
+`endif
 
     logic [DATA_W-1:0]  mem [DEPTH];
     logic [PTR_W:0]     wr_ptr, rd_ptr;

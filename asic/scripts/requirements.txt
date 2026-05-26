@@ -1,0 +1,8 @@
+# Python tooling required for the Sky130 ASIC flow.
+# Install with:  pip install -r asic/scripts/requirements.txt
+#
+# Pinned to known-good versions; bump in lockstep with the PDK commit in
+# asic/scripts/versions.env to avoid drift between local and CI builds.
+
+openlane==2.2.9
+volare==0.20.4

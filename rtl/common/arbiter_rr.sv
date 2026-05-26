@@ -13,10 +13,12 @@ module arbiter_rr #(
 
     logic [$clog2(NUM_REQ)-1:0] last_grant;
 
+`ifdef SIMULATION
     initial begin
         if (NUM_REQ != (1 << $clog2(NUM_REQ)))
             $fatal(1, "arbiter_rr NUM_REQ must be power-of-two, got %0d", NUM_REQ);
     end
+`endif
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

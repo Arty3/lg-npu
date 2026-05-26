@@ -152,9 +152,46 @@ synth-yosys: ## Run Yosys generic synthesis to catch structural issues
 	@echo ""
 	@echo "=== synth-yosys: log at $(SYNTH_BUILD)/synth.log ==="
 
+.PHONY: asic-sky130-deps
+asic-sky130-deps: ## Install Python deps (openlane, volare) into the active env
+	python3 -m pip install --upgrade pip
+	python3 -m pip install -r asic/scripts/requirements.txt
+
+.PHONY: asic-sky130-sv2v
+asic-sky130-sv2v: ## Build and install sv2v at the pinned tag (used by viz/util flows)
+	bash asic/scripts/install_sv2v.sh
+
+.PHONY: asic-sky130-pdk
+asic-sky130-pdk: ## Install sky130A PDK at the pinned commit via Volare
+	bash asic/scripts/install_pdk.sh
+
+.PHONY: asic-sky130-macros
+asic-sky130-macros: ## Stage OpenRAM SRAM macros into asic/openlane2/macros/
+	bash asic/scripts/stage_macros.sh
+
+.PHONY: asic-sky130-bootstrap
+asic-sky130-bootstrap: ## One-shot: deps + PDK + macros + env validation
+	bash asic/scripts/bootstrap.sh
+
 .PHONY: asic-sky130-setup
 asic-sky130-setup: ## Validate Sky130 PDK environment variables
 	bash asic/scripts/setup_sky130_env.sh
+
+.PHONY: asic-sky130-prep
+asic-sky130-prep: ## Stage SV RTL to asic/openlane2/src/rtl/*.sv for Synlig
+	bash asic/scripts/prep_design.sh
+
+.PHONY: asic-sky130-flow
+asic-sky130-flow: asic-sky130-setup asic-sky130-prep ## Run full OpenLane2 flow (Synlig SV synth->signoff)
+	bash asic/scripts/run_openlane.sh
+
+.PHONY: asic-sky130-ci
+asic-sky130-ci: asic-sky130-setup asic-sky130-prep ## CI gate: Synlig synth + STA + DRC + LVS via OpenLane2
+	bash asic/scripts/run_openlane.sh
+
+.PHONY: asic-sky130-clean
+asic-sky130-clean: ## Remove OpenLane2 run artefacts
+	rm -rf asic/openlane2/runs asic/openlane2/src/rtl
 
 # SW test targets
 SW_TEST_FLAGS := $(SW_STD) $(SW_WARN) -Ofast -Wno-unused-function

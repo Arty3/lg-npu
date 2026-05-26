@@ -1,0 +1,89 @@
+{
+    "//": "OpenLane2 config for lg-npu top-level (sky130A).",
+    "//": "Source RTL is SystemVerilog and is read directly via Synlig.",
+    "//": "Run `make asic-sky130-prep` to restage src/rtl/*.sv before flow.",
+
+    "DESIGN_NAME": "npu_shell",
+    "VERILOG_FILES": "dir::src/rtl/*.sv",
+    "VERILOG_INCLUDE_DIRS": [
+        "dir::src/include",
+        "dir::src/include/pkg",
+        "dir::src/include/defines"
+    ],
+    "VERILOG_DEFINES": [
+        "SYNTHESIS",
+        "ASIC_BUILD"
+    ],
+    "USE_SYNLIG": true,
+
+    "//": "Skip OpenLane's Verilator lint step - we already lint RTL via",
+    "//": "`make lint` upstream, and Verilator chokes on the auto-generated",
+    "//": "Sky130 stdcell UDP blackboxes (e.g. udp_pwrgood_pp$PG).",
+    "RUN_LINTER": false,
+
+    "CLOCK_PORT": "clk",
+    "CLOCK_NET": "clk",
+    "CLOCK_PERIOD": 10.0,
+
+    "FALLBACK_SDC_FILE": "dir::constraints/base.sdc",
+    "PNR_SDC_FILE":      "dir::constraints/base.sdc",
+    "SIGNOFF_SDC_FILE":  "dir::constraints/base.sdc",
+    "FP_PIN_ORDER_CFG":  "dir::constraints/pin_order.cfg",
+
+    "//": "Floorplan - sized to host 14 SRAM macros (2 wt + 4 act + 8 psum)",
+    "//": "in a 4-col x 4-row grid along the bottom of the die, with the",
+    "//": "stdcell logic + top-level PDN straps filling the area above.",
+    "//": "Refine once first run gives real area.",
+    "FP_SIZING": "absolute",
+    "DIE_AREA": "0 0 3200 2400",
+    "PL_TARGET_DENSITY_PCT": 55,
+
+    "//": "Power distribution network - top-level stripes on met4/met5.",
+    "FP_PDN_VOFFSET": 16.32,
+    "FP_PDN_HOFFSET": 16.65,
+    "FP_PDN_VPITCH": 153.6,
+    "FP_PDN_HPITCH": 153.18,
+    "FP_PDN_VWIDTH": 3.1,
+    "FP_PDN_HWIDTH": 3.1,
+    "FP_PDN_VSPACING": 15.5,
+    "FP_PDN_HSPACING": 15.5,
+    "FP_PDN_CORE_RING": 1,
+    "FP_PDN_ENABLE_RAILS": 1,
+
+    "//": "Macros: OpenRAM-generated sky130 SRAMs.",
+    "//": "Download asic/openlane2/macros/ via `make asic-sky130-macros`.",
+    "//": "Only the 2 KB 32x512 variant ships pre-built; larger buffers tile.",
+    "EXTRA_LEFS":           ["dir::macros/sky130_sram_2kbyte_1rw1r_32x512_8.lef"],
+    "EXTRA_GDS_FILES":      ["dir::macros/sky130_sram_2kbyte_1rw1r_32x512_8.gds"],
+    "EXTRA_LIBS":           ["dir::macros/sky130_sram_2kbyte_1rw1r_32x512_8_TT_1p8V_25C.lib"],
+    "EXTRA_VERILOG_MODELS": ["dir::macros/sky130_sram_2kbyte_1rw1r_32x512_8.v"],
+    "MACRO_PLACEMENT_CFG":  "dir::constraints/macro_placement.cfg",
+
+    "//": "Sign-off gates.",
+    "RUN_HEURISTIC_DIODE_INSERTION": true,
+    "RUN_KLAYOUT_DRC": true,
+    "RUN_MAGIC_DRC":   true,
+    "RUN_LVS":         true,
+
+    "//": "Threading knobs for parallel-capable stages (tune per host).",
+    "DRT_THREADS": 16,
+    "STA_THREADS": 16,
+    "KLAYOUT_DRC_THREADS": 16,
+    "KLAYOUT_XOR_THREADS": 16,
+
+    "//": "STA - typical+slow corners, plus a margin on top of CLOCK_PERIOD.",
+    "CLOCK_UNCERTAINTY_CONSTRAINT": 0.25,
+    "IO_DELAY_CONSTRAINT": 20,
+
+    "//": "Synthesis - keep hierarchy until early floorplan to aid debug.",
+    "SYNTH_STRATEGY": "AREA 0",
+    "SYNTH_NO_FLAT": false,
+
+    "//": "Resets and async paths - false-path handled in BASE_SDC_FILE.",
+    "//": "Single clock domain so no async groups.",
+
+    "pdk::sky130A": {
+        "MAX_FANOUT_CONSTRAINT": 10,
+        "RUN_ANTENNA_REPAIR": true
+    }
+}

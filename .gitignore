@@ -15,6 +15,7 @@ __pycache__/
 *.pyd
 *.egg-info/
 venv/
+.venv/
 .env/
 
 # Build artifacts
@@ -79,6 +80,14 @@ asic/work/
 asic/syn/reports/
 asic/pnr/reports/
 asic/signoff/reports/
+asic/openlane2/runs/
+asic/openlane2/src/
+asic/openlane2/slpp_all/
+**/slpp_all/
+asic/openlane2/macros/*.lef
+asic/openlane2/macros/*.gds
+asic/openlane2/macros/*.v
+asic/openlane2/macros/*.lib
 *.gds
 *.gds2
 *.oas

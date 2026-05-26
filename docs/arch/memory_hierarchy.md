@@ -88,6 +88,52 @@ Writes take effect at the positive clock edge of cycle T.
 
 ---
 
+## Sky130 ASIC implementation
+
+For the sky130A target the wrappers in `rtl/platform/mem_macro_*_wrap.sv`
+map onto the public OpenRAM macros declared in
+`rtl/platform/sky130_sram_blackboxes.sv`. Only the **2 KB 32x512** variant
+ships pre-built in `efabless/sky130_sram_macros`, so all on-chip buffers
+are **tiled** from that single macro. The wrappers handle the per-bank
+address decode, the byte-lane packing (for the 8-bit logical buffers),
+and the per-port chip-select gating so that the buffer modules themselves
+are unchanged between FPGA, sim, and ASIC builds.
+
+| Buffer     | Wrapper                 | Macro                                  | Banks | Topology                                       |
+| ---------- | ----------------------- | -------------------------------------- | ----- | ---------------------------------------------- |
+| Weight     | `mem_macro_1rw1r_wrap`  | `sky130_sram_2kbyte_1rw1r_32x512_8`    | 2     | `addr[10]` = bank, `addr[1:0]` = byte lane     |
+| Activation | `mem_macro_1rw1r_wrap`  | `sky130_sram_2kbyte_1rw1r_32x512_8`    | 4     | `addr[12:11]` = bank, `addr[1:0]` = byte lane  |
+| Psum       | `mem_macro_wrap`        | `sky130_sram_2kbyte_1rw1r_32x512_8`    | 8     | `addr[11:9]` = bank, port B tied off           |
+
+Total: **14 macros** (2 + 4 + 8), each `683.1 x 416.54 um`. Macros are
+placed in a 4-column x 4-row grid along the bottom of the die; see
+`asic/openlane2/constraints/macro_placement.cfg`.
+
+```mermaid
+flowchart LR
+    A[8-bit logical addr<br/>a_addr[N-1:0]] --> S[Split]
+    S --> B["bank = addr[high]"]
+    S --> R["row = addr[mid:2]"]
+    S --> L["lane = addr[1:0]"]
+    B --> CSB["per-bank csb0/csb1"]
+    R --> M[(sky130_sram_2kbyte<br/>32 b x 512)]
+    L --> WM["wmask = 1 << lane"]
+    CSB --> M
+    WM --> M
+    M --> RD[32-bit dout]
+    L -->|latched| LM[lane mux]
+    B -->|latched| BM[bank mux]
+    RD --> BM --> LM --> RDOUT[8-bit rdata]
+```
+
+Single clock domain (100 MHz / 10 ns) is shared across stdcells and both
+macro ports (`clk0` / `clk1` tied to the same net). Power pins (`vccd1` /
+`vssd1`) appear under `\`ifdef USE_POWER_PINS`; they are not yet
+propagated through the upper wrappers - see
+`docs/bringup/asic_bringup.md` section 10.
+
+---
+
 ## Buffer Router
 
 `npu_buffer_router` sits between `npu_reg_block` (host MMIO) and the three
