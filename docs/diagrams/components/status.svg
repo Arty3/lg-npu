@@ -19,39 +19,39 @@
   .splitjoinBody {
     fill:#000;
   }</style>
-  <g s:type="and" transform="translate(232,69)" s:width="30" s:height="25" id="cell_$and$/tmp/tmpcs_3qmp6.v:5456$1403">
+  <g s:type="and" transform="translate(232,69)" s:width="30" s:height="25" id="cell_$and$/tmp/tmp81ac8vs3.v:5456$1403">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmpcs_3qmp6.v:5456$1403"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmp81ac8vs3.v:5456$1403"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="and" transform="translate(297,76.5)" s:width="30" s:height="25" id="cell_$and$/tmp/tmpcs_3qmp6.v:5456$1405">
+  <g s:type="and" transform="translate(297,76.5)" s:width="30" s:height="25" id="cell_$and$/tmp/tmp81ac8vs3.v:5456$1405">
     <s:alias val="$and"/>
     <s:alias val="$logic_and"/>
     <s:alias val="$_AND_"/>
-    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmpcs_3qmp6.v:5456$1405"/>
+    <path d="M0,0 L0,25 L15,25 A15 12.5 0 0 0 15,0 Z" class="cell_$and$/tmp/tmp81ac8vs3.v:5456$1405"/>
     <g s:x="0" s:y="5" s:pid="A"/>
     <g s:x="0" s:y="20" s:pid="B"/>
     <g s:x="30" s:y="12.5" s:pid="Y"/>
   </g>
-  <g s:type="not" transform="translate(143,64)" s:width="30" s:height="20" id="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1402">
+  <g s:type="not" transform="translate(143,64)" s:width="30" s:height="20" id="cell_$not$/tmp/tmp81ac8vs3.v:5456$1402">
     <s:alias val="$_NOT_"/>
     <s:alias val="$not"/>
     <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1402"/>
-    <circle cx="23" cy="10" r="3" class="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1402"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$not$/tmp/tmp81ac8vs3.v:5456$1402"/>
+    <circle cx="23" cy="10" r="3" class="cell_$not$/tmp/tmp81ac8vs3.v:5456$1402"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="25" s:y="10" s:pid="Y"/>
   </g>
-  <g s:type="not" transform="translate(232,194)" s:width="30" s:height="20" id="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1404">
+  <g s:type="not" transform="translate(232,194)" s:width="30" s:height="20" id="cell_$not$/tmp/tmp81ac8vs3.v:5456$1404">
     <s:alias val="$_NOT_"/>
     <s:alias val="$not"/>
     <s:alias val="$logic_not"/>
-    <path d="M0,0 L0,20 L20,10 Z" class="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1404"/>
-    <circle cx="23" cy="10" r="3" class="cell_$not$/tmp/tmpcs_3qmp6.v:5456$1404"/>
+    <path d="M0,0 L0,20 L20,10 Z" class="cell_$not$/tmp/tmp81ac8vs3.v:5456$1404"/>
+    <circle cx="23" cy="10" r="3" class="cell_$not$/tmp/tmp81ac8vs3.v:5456$1404"/>
     <g s:x="0" s:y="10" s:pid="A"/>
     <g s:x="25" s:y="10" s:pid="Y"/>
   </g>
