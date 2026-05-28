@@ -23,7 +23,8 @@ set_clock_uncertainty $CLK_UNCERT [get_clocks clk]
 set_clock_transition  0.15        [get_clocks clk]
 
 # All non-clock primary inputs / outputs share one budget for now.
-set ALL_INPUTS  [remove_from_collection [all_inputs]  [get_ports $CLK_PORT]]
+# OpenSTA does not implement `remove_from_collection`; filter by name instead.
+set ALL_INPUTS  [all_inputs -no_clocks]
 set ALL_OUTPUTS [all_outputs]
 
 set_input_delay  -clock clk -max $IO_DELAY $ALL_INPUTS
